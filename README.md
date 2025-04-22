@@ -126,4 +126,4 @@ See the LICENSE file for details.
 
 ## 👥 Contributors
 
-The AIEDU Team
+Andres Calvo - [AndresACV](https://github.com/AndresACV)
