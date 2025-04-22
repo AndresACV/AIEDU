@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG System - Speech Interaction</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+            background-color: #f8f9fa;
+        }
+        .logo {
+            margin: 1rem 0;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="text-center logo">
+                    <span>RAG System with Text-to-Voice</span>
+                </div>
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h4>Speech Interaction System</h4>
+                        <ul class="nav nav-tabs mb-4" id="speechTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="text-to-speech-tab" data-bs-toggle="tab" data-bs-target="#text-to-speech-content" type="button" role="tab" aria-controls="text-to-speech-content" aria-selected="true">Text to Speech</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="speech-to-text-tab" data-bs-toggle="tab" data-bs-target="#speech-to-text-content" type="button" role="tab" aria-controls="speech-to-text-content" aria-selected="false">Speech to Text</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="speechTabsContent">
+                            <!-- Text to Speech Section -->
+                            <div class="tab-pane fade show active" id="text-to-speech-content" role="tabpanel" aria-labelledby="text-to-speech-tab">
+                                <div class="mb-3">
+                                    <label for="voice-select" class="form-label">Voice:</label>
+                                    <select id="voice-select" class="form-select"></select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="input-text" class="form-label">Enter Text:</label>
+                                    <textarea id="input-text" class="form-control" rows="5" placeholder="Type or paste text here..."></textarea>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <button id="text-to-speech-btn" class="btn btn-primary">
+                                        <i class="bi bi-volume-up"></i> Convert to Speech
+                                    </button>
+                                </div>
+                                <div id="loading" class="text-center mt-3" style="display: none;">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p>Generating audio...</p>
+                                </div>
+                                <div id="audio-container" class="mt-3" style="display: none;">
+                                    <audio id="audio-player" controls style="width: 100%;"></audio>
+                                </div>
+                            </div>
+                            
+                            <!-- Speech to Text Section -->
+                            <div class="tab-pane fade" id="speech-to-text-content" role="tabpanel" aria-labelledby="speech-to-text-tab">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="recognition-language" class="form-label">Recognition Language</label>
+                                        <select class="form-select" id="recognition-language">
+                                            <option value="en-US">English</option>
+                                            <option value="es-ES">Spanish</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-info mt-3">
+                                    <p><small>Note: English uses offline recognition. Spanish requires an internet connection.</small></p>
+                                </div>
+                                
+                                <div class="d-grid gap-2 mb-3">
+                                    <button id="start-recording" class="btn btn-primary">
+                                        <i class="bi bi-mic-fill"></i> Start Recording
+                                    </button>
+                                </div>
+                                
+                                <div class="progress mb-3" style="display: none;" id="recording-progress">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                
+                                <!-- Audio Volume Meter -->
+                                <div class="card mb-3" id="volume-meter-container" style="display: none;">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <span>Microphone Volume</span>
+                                        <span id="volume-value">0</span>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="progress" style="height: 30px;">
+                                            <div id="volume-meter" class="progress-bar bg-success" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="transcript" class="form-label">Transcript</label>
+                                    <div id="transcript-container" class="border rounded p-3 bg-light" style="min-height: 150px; max-height: 300px; overflow-y: auto;">
+                                        <p id="final-transcript"></p>
+                                    </div>
+                                </div>
+                                
+                                <div id="stt-status" class="text-muted small mb-3"></div>
+                                
+                                <div class="d-flex gap-2">
+                                    <button id="copy-transcript" class="btn btn-outline-secondary" disabled>
+                                        <i class="bi bi-clipboard"></i> Copy Text
+                                    </button>
+                                    <button id="send-to-tts" class="btn btn-outline-primary" disabled>
+                                        <i class="bi bi-arrow-right-circle"></i> Send to Text-to-Speech
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-center text-muted">
+                        <p class="mb-0">"La clave no es el LLM. La clave es el embedding."</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let audioPlayer = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordingInterval = null;
+        let recordingStartTime = null;
+        let recordingDuration = 10000; // 10 seconds max recording time
+        let currentStream = null; // Store the stream reference globally
+        
+        // Volume meter variables
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let volumeInterval = null;
+        let dataArray = null;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load voices when the page loads
+            loadVoices();
+            
+            // Set up button handlers
+            setupButtonHandlers();
+        });
+        
+        function loadVoices() {
+            // Clear the dropdown first
+            const voiceSelect = document.getElementById('voice-select');
+            voiceSelect.innerHTML = '';
+            
+            // Add a loading option
+            const loadingOption = document.createElement('option');
+            loadingOption.text = 'Loading voices...';
+            voiceSelect.appendChild(loadingOption);
+            
+            // Fetch voices from server
+            fetch('/voices')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Voices data:', data);
+                    
+                    // Clear loading option
+                    voiceSelect.innerHTML = '';
+                    
+                    if (data.success && data.voices && data.voices.length > 0) {
+                        // Add each voice to dropdown
+                        data.voices.forEach(voice => {
+                            const option = document.createElement('option');
+                            option.value = voice.id;
+                            option.text = voice.name;
+                            voiceSelect.appendChild(option);
+                        });
+                        
+                        console.log('Loaded ' + data.voices.length + ' voices');
+                    } else {
+                        // No voices found or error
+                        const noVoicesOption = document.createElement('option');
+                        noVoicesOption.text = 'No voices available';
+                        voiceSelect.appendChild(noVoicesOption);
+                        console.error('No voices found or error loading voices');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading voices:', error);
+                    voiceSelect.innerHTML = '';
+                    const errorOption = document.createElement('option');
+                    errorOption.text = 'Error loading voices';
+                    voiceSelect.appendChild(errorOption);
+                });
+        }
+        
+        function setupButtonHandlers() {
+            // Text-to-speech button
+            document.getElementById('text-to-speech-btn').addEventListener('click', function() {
+                const text = document.getElementById('input-text').value.trim();
+                const voiceId = document.getElementById('voice-select').value;
+                
+                if (!text) {
+                    alert('Please enter some text to convert to speech');
+                    return;
+                }
+                
+                // Show loading state
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('audio-container').style.display = 'none';
+                
+                // Send request to server
+                fetch('/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voice_id: voiceId
+                    }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Hide loading indicator
+                    document.getElementById('loading').style.display = 'none';
+                    
+                    if (data.success) {
+                        // Play the audio
+                        const audioPlayer = document.getElementById('audio-player');
+                        audioPlayer.src = data.audio_url;
+                        document.getElementById('audio-container').style.display = 'block';
+                        audioPlayer.play();
+                    } else {
+                        alert('Error: ' + (data.error || 'Unknown error generating speech'));
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').style.display = 'none';
+                    console.error('Error:', error);
+                    alert('An error occurred. Please try again.');
+                });
+            });
+            
+            // Start/stop recording button
+            document.getElementById('start-recording').addEventListener('click', function() {
+                if (isRecording) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+            });
+            
+            // Copy transcript button
+            document.getElementById('copy-transcript').addEventListener('click', function() {
+                const transcript = document.getElementById('final-transcript').textContent;
+                navigator.clipboard.writeText(transcript)
+                    .then(() => {
+                        document.getElementById('stt-status').textContent = 'Transcript copied to clipboard';
+                        setTimeout(() => {
+                            document.getElementById('stt-status').textContent = '';
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('Could not copy text: ', err);
+                    });
+            });
+            
+            // Send to TTS button
+            document.getElementById('send-to-tts').addEventListener('click', function() {
+                const transcript = document.getElementById('final-transcript').textContent;
+                document.getElementById('input-text').value = transcript;
+                
+                // Switch to TTS tab
+                const ttsTab = document.getElementById('text-to-speech-tab');
+                bootstrap.Tab.getOrCreateInstance(ttsTab).show();
+            });
+        }
+        
+        async function startRecording() {
+            try {
+                // Reset UI
+                document.getElementById('final-transcript').textContent = '';
+                document.getElementById('stt-status').textContent = 'Requesting microphone access...';
+                document.getElementById('copy-transcript').disabled = true;
+                document.getElementById('send-to-tts').disabled = true;
+                
+                console.log('Attempting to access microphone...');
+                
+                // Get user media with explicit error handling
+                try {
+                    // Store stream in the global variable
+                    currentStream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        } 
+                    });
+                    
+                    console.log('Microphone access granted:', currentStream.getAudioTracks()[0].label);
+                    
+                    // Check if we have audio tracks
+                    if (currentStream.getAudioTracks().length === 0) {
+                        throw new Error('No audio tracks available in the media stream');
+                    }
+                    
+                    // Set up media recorder with explicit mime type checks
+                    let options = {};
+                    
+                    // Check for supported mime types
+                    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                        options.mimeType = 'audio/webm;codecs=opus';
+                        console.log('Using audio/webm;codecs=opus');
+                    } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                        options.mimeType = 'audio/webm';
+                        console.log('Using audio/webm');
+                    } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                        options.mimeType = 'audio/mp4';
+                        console.log('Using audio/mp4');
+                    } else {
+                        console.log('No supported mime type found, using browser default');
+                    }
+                    
+                    mediaRecorder = new MediaRecorder(currentStream, options);
+                    audioChunks = [];
+                    
+                    // Set up audio volume meter
+                    setupVolumeMeter(currentStream);
+                    
+                } catch (micError) {
+                    console.error('Error accessing microphone:', micError.name, micError.message);
+                    document.getElementById('stt-status').textContent = `Error accessing microphone: ${micError.name}. ${getPermissionErrorHelp(micError)}`;
+                    throw micError; // Rethrow to be caught by outer try/catch
+                }
+                
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log('Audio chunk captured, size:', event.data.size);
+                    }
+                });
+                
+                mediaRecorder.addEventListener('stop', async () => {
+                    // Stop all tracks to release the microphone using the global reference
+                    if (currentStream && currentStream.getTracks) {
+                        currentStream.getTracks().forEach(track => track.stop());
+                    }
+                    
+                    // Process the recording
+                    document.getElementById('stt-status').textContent = 'Processing your speech...';
+                    
+                    // Create audio blob 
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    
+                    // Convert to WAV format on the client side for better compatibility
+                    document.getElementById('stt-status').textContent = 'Converting audio format...';
+                    
+                    // Create an audio element to convert the format
+                    const audioElement = new Audio();
+                    audioElement.src = URL.createObjectURL(audioBlob);
+                    
+                    // Create an audio context
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const analyser = audioContext.createAnalyser();
+                    
+                    // This will hold our WAV file data
+                    let wavData = null;
+                    
+                    // When the audio is loaded, process it
+                    audioElement.onloadedmetadata = async function() {
+                        try {
+                            // Create a media element source
+                            const source = audioContext.createMediaElementSource(audioElement);
+                            source.connect(analyser);
+                            analyser.connect(audioContext.destination);
+                            
+                            // Play and immediately pause to initialize the audio (required in some browsers)
+                            await audioElement.play();
+                            audioElement.pause();
+                            
+                            // Create a WAV encoder (simple implementation)
+                            const wavBlob = await recordAudioToWav(audioChunks, mediaRecorder.mimeType);
+                            
+                            // Prepare form data with the WAV
+                            const formData = new FormData();
+                            formData.append('audio', wavBlob, 'recording.wav');
+                            formData.append('language', document.getElementById('recognition-language').value);
+                            
+                            // Send to server
+                            sendAudioToServer(formData);
+                            
+                        } catch (error) {
+                            console.error('Error converting audio:', error);
+                            // Fallback to original format if conversion fails
+                            const formData = new FormData();
+                            formData.append('audio', audioBlob, 'recording.webm');
+                            formData.append('language', document.getElementById('recognition-language').value);
+                            sendAudioToServer(formData);
+                        }
+                    };
+                    
+                    // Handle errors
+                    audioElement.onerror = function(error) {
+                        console.error('Error loading audio:', error);
+                        // Fallback to original format
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'recording.webm');
+                        formData.append('language', document.getElementById('recognition-language').value);
+                        sendAudioToServer(formData);
+                    };
+                    
+                    // Function to send the form data to server
+                    function sendAudioToServer(formData) {
+                        document.getElementById('stt-status').textContent = 'Processing your speech...';
+                        
+                        console.log('Sending audio to server for processing');
+                        fetch('/upload-audio', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            console.log('Response JSON:', result);
+                            
+                            if (result.success) {
+                                document.getElementById('final-transcript').textContent = result.transcript;
+                                document.getElementById('stt-status').textContent = 'Transcription complete';
+                                
+                                // Enable buttons if we have text
+                                document.getElementById('copy-transcript').disabled = !result.transcript;
+                                document.getElementById('send-to-tts').disabled = !result.transcript;
+                            } else {
+                                document.getElementById('stt-status').textContent = 'Error: ' + result.error;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error processing audio:', error);
+                            document.getElementById('stt-status').textContent = 'Error processing audio: ' + error.message;
+                        });
+                    }
+                    
+                    // Convert WebM audio chunks to WAV
+                    async function recordAudioToWav(audioChunks, mimeType) {
+                        return new Promise(async (resolve, reject) => {
+                            try {
+                                // Create a blob from the audio chunks
+                                const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
+                                
+                                // Create an off-screen audio element
+                                const audio = new Audio();
+                                audio.src = URL.createObjectURL(audioBlob);
+                                
+                                // Set up AudioContext
+                                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                
+                                // Load the blob as an ArrayBuffer
+                                const arrayBuffer = await audioBlob.arrayBuffer();
+                                
+                                // Decode the audio data
+                                audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+                                    // Convert to WAV
+                                    const wavBuffer = bufferToWav(buffer, audioContext.sampleRate);
+                                    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+                                    resolve(wavBlob);
+                                }, (err) => {
+                                    console.error('Error decoding audio data', err);
+                                    reject(err);
+                                });
+                            } catch (error) {
+                                console.error('Error in WAV conversion:', error);
+                                reject(error);
+                            }
+                        });
+                    }
+                    
+                    // Convert AudioBuffer to WAV format
+                    function bufferToWav(buffer, sampleRate) {
+                        const numChannels = buffer.numberOfChannels;
+                        const length = buffer.length * numChannels * 2;
+                        const wav = new DataView(new ArrayBuffer(44 + length));
+                        let offset = 0;
+                        
+                        // Write WAV header
+                        // "RIFF" chunk descriptor
+                        writeString(wav, offset, 'RIFF'); offset += 4;
+                        wav.setUint32(offset, 36 + length, true); offset += 4;
+                        writeString(wav, offset, 'WAVE'); offset += 4;
+                        
+                        // "fmt " sub-chunk
+                        writeString(wav, offset, 'fmt '); offset += 4;
+                        wav.setUint32(offset, 16, true); offset += 4; // subchunk size
+                        wav.setUint16(offset, 1, true); offset += 2; // PCM format
+                        wav.setUint16(offset, numChannels, true); offset += 2; // channels
+                        wav.setUint32(offset, sampleRate, true); offset += 4; // sample rate
+                        wav.setUint32(offset, sampleRate * numChannels * 2, true); offset += 4; // byte rate
+                        wav.setUint16(offset, numChannels * 2, true); offset += 2; // block align
+                        wav.setUint16(offset, 16, true); offset += 2; // bits per sample
+                        
+                        // "data" sub-chunk
+                        writeString(wav, offset, 'data'); offset += 4;
+                        wav.setUint32(offset, length, true); offset += 4;
+                        
+                        // Write interleaved audio data
+                        const channelData = [];
+                        for (let i = 0; i < numChannels; i++) {
+                            channelData.push(buffer.getChannelData(i));
+                        }
+                        
+                        let sample, sampleIndex;
+                        for (let i = 0; i < buffer.length; i++) {
+                            for (let channel = 0; channel < numChannels; channel++) {
+                                sample = Math.max(-1, Math.min(1, channelData[channel][i]));
+                                sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+                                wav.setInt16(offset, sample, true);
+                                offset += 2;
+                            }
+                        }
+                        
+                        return wav.buffer;
+                    }
+                    
+                    // Helper to write ASCII strings to DataView
+                    function writeString(view, offset, string) {
+                        for (let i = 0; i < string.length; i++) {
+                            view.setUint8(offset + i, string.charCodeAt(i));
+                        }
+                    }
+                    
+                    try {
+                        // This starts the conversion process
+                        // The sendAudioToServer function will be called after conversion
+                    } catch (error) {
+                        console.error('Error setting up audio processing:', error);
+                        document.getElementById('stt-status').textContent = 'Error processing audio: ' + error.message;
+                    }
+                });
+                
+                // Start recording
+                mediaRecorder.start(1000); // Get data each second
+                isRecording = true;
+                document.getElementById('start-recording').innerHTML = '<i class="bi bi-stop-fill"></i> Stop Recording';
+                document.getElementById('stt-status').textContent = 'Recording... (speak now)';
+                
+                // Show and animate progress bar
+                const progressBar = document.getElementById('recording-progress');
+                const progressBarInner = progressBar.querySelector('.progress-bar');
+                progressBar.style.display = 'flex';
+                progressBarInner.style.width = '0%';
+                
+                // Set up recording duration tracking
+                recordingStartTime = Date.now();
+                recordingInterval = setInterval(() => {
+                    const elapsed = Date.now() - recordingStartTime;
+                    const percent = Math.min(100, (elapsed / recordingDuration) * 100);
+                    progressBarInner.style.width = percent + '%';
+                    
+                    // Auto-stop after max duration
+                    if (elapsed >= recordingDuration) {
+                        stopRecording();
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('Error in recording process:', error.name, error.message);
+                
+                // Show detailed error information to the user
+                let errorMessage = `Microphone error: ${error.name}. ${error.message}`;
+                let helpMessage = getPermissionErrorHelp(error);
+                
+                document.getElementById('stt-status').textContent = errorMessage;
+                document.getElementById('final-transcript').textContent = helpMessage;
+                
+                // Show a more user-friendly alert
+                alert(`Microphone access failed\n\nError: ${error.name}\n${helpMessage}`);
+            }
+        }
+        
+        function stopRecording() {
+            if (!isRecording || !mediaRecorder) return;
+            
+            // Clear intervals
+            clearInterval(recordingInterval);
+            recordingInterval = null;
+            
+            // Stop volume meter
+            stopVolumeMeter();
+            
+            // Update UI
+            document.getElementById('start-recording').innerHTML = '<i class="bi bi-mic-fill"></i> Start Recording';
+            document.getElementById('stt-status').textContent = 'Stopping recording...';
+            document.getElementById('recording-progress').style.display = 'none';
+            document.getElementById('volume-meter-container').style.display = 'none';
+            
+            try {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+            } catch (e) {
+                console.error('Error stopping recorder:', e);
+                document.getElementById('stt-status').textContent = 'Error stopping recording: ' + e.message;
+                isRecording = false;
+                
+                // Clean up in case of error
+                if (currentStream && currentStream.getTracks) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+            }
+        }
+        // Audio volume meter functions
+        function setupVolumeMeter(stream) {
+            try {
+                // Create audio context
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioContext = new AudioContext();
+                
+                // Create analyser node
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                
+                // Connect microphone to analyser
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                // Prepare data array
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                // Show volume meter
+                document.getElementById('volume-meter-container').style.display = 'block';
+                
+                // Start updating volume meter
+                volumeInterval = setInterval(updateVolumeMeter, 100); // Update every 100ms
+                
+                console.log('Volume meter initialized');
+            } catch (error) {
+                console.error('Error setting up volume meter:', error);
+            }
+        }
+        
+        function updateVolumeMeter() {
+            if (!analyser) return;
+            
+            // Get volume data
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Calculate volume (average of frequency data)
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            
+            // Map to percentage (0-100)
+            const volume = Math.min(100, Math.max(0, Math.round(average * 100 / 256)));
+            
+            // Update volume meter
+            const meter = document.getElementById('volume-meter');
+            const volumeValue = document.getElementById('volume-value');
+            
+            meter.style.width = volume + '%';
+            meter.setAttribute('aria-valuenow', volume);
+            volumeValue.textContent = volume;
+            
+            // Change color based on volume
+            if (volume < 30) {
+                meter.className = 'progress-bar bg-danger'; // Low volume - red
+            } else if (volume < 70) {
+                meter.className = 'progress-bar bg-warning'; // Medium volume - yellow
+            } else {
+                meter.className = 'progress-bar bg-success'; // Good volume - green
+            }
+        }
+        
+        function stopVolumeMeter() {
+            // Clear interval
+            if (volumeInterval) {
+                clearInterval(volumeInterval);
+                volumeInterval = null;
+            }
+            
+            // Disconnect and clean up
+            if (microphone) {
+                microphone.disconnect();
+                microphone = null;
+            }
+            
+            if (analyser) {
+                analyser = null;
+            }
+            
+            if (audioContext) {
+                if (audioContext.state !== 'closed') {
+                    try {
+                        audioContext.close();
+                    } catch (e) {
+                        console.error('Error closing audio context:', e);
+                    }
+                }
+                audioContext = null;
+            }
+            
+            // Hide volume meter
+            document.getElementById('volume-meter-container').style.display = 'none';
+        }
+        // Helper function to provide more user-friendly error messages
+        function getPermissionErrorHelp(error) {
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                return 'You need to grant microphone permission. Click the camera/microphone icon in your browser address bar and select "Allow".';
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                return 'No microphone found. Please check that a microphone is connected to your device.';
+            } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                return 'Your microphone is busy or not available. Close other applications that might be using your microphone.';
+            } else if (error.name === 'OverconstrainedError') {
+                return 'Cannot satisfy the requested microphone constraints. Try a different microphone.';
+            } else if (error.name === 'SecurityError') {
+                return 'Use of microphone is not allowed in this context for security reasons. Try using HTTPS instead of HTTP.';
+            } else if (error.name === 'AbortError') {
+                return 'Permission request for microphone was aborted. Please try again.';
+            } else {
+                return 'Please check that your microphone is connected and not being used by another application.';
+            }
+        }
+    </script>
+</body>
+</html>
