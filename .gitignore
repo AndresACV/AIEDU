@@ -178,3 +178,6 @@ windsurf_docs/
 
 # Generated audio files
 web_app/static/audio/
+
+# Ignore ML models
+web_app/models/
