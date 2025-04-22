@@ -10,16 +10,14 @@
 
 An advanced Retrieval-Augmented Generation (RAG) system with comprehensive speech interaction capabilities. This application combines high-quality embeddings with 100% offline speech recognition and synthesis to provide educational AI responses through an intuitive web interface.
 
-> "La clave no es el LLM. Lo clave es el embedding." — The key is not the LLM, the key is the embedding.
-
 ## ✨ Features
 
-🗣️ **Complete Speech Interaction**: Fully functional text-to-speech and speech-to-text capabilities
-🌐 **Multilingual Support**: Works with both English and Spanish languages
-💻 **100% Offline Processing**: Uses local models for privacy and reliability
-🔊 **Real-time Audio Visualization**: Interactive volume display for user feedback
-🧩 **Modular Architecture**: Designed for easy extension and enhancement
-🌟 **Web-based Interface**: User-friendly Flask application for all functionalities
+- **🗣️ Complete Speech Interaction**: Fully functional text-to-speech and speech-to-text capabilities
+- **🌐 Multilingual Support**: Works with both English and Spanish languages
+- **💻 100% Offline Processing**: Uses local models for privacy and reliability
+- **🔊 Real-time Audio Visualization**: Interactive volume display for user feedback
+- **🧩 Modular Architecture**: Designed for easy extension and enhancement
+- **🌟 Web-based Interface**: User-friendly Flask application for all functionalities
 
 ## 🏗️ Project Structure
 
