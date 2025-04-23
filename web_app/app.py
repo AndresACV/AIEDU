@@ -29,6 +29,39 @@ os.makedirs(AUDIO_FOLDER, exist_ok=True)
 UPLOAD_FOLDER = os.path.join(app.static_folder, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Start a background thread to pre-download speech models for all supported languages
+def preload_speech_models():
+    """Preload all speech recognition models in a background thread."""
+    print("Starting background thread to preload speech models...")
+    
+    def download_all_models():
+        try:
+            # Install Vosk if needed
+            install_vosk_if_needed()
+            
+            # Check if English model exists, download only if needed
+            print("Checking English speech model...")
+            en_model = download_model_if_needed('en')
+            print(f"English model status: {'Ready' if en_model else 'Failed to download'}")
+            
+            # Check if Spanish model exists, download only if needed
+            print("Checking Spanish speech model...")
+            es_model = download_model_if_needed('es')
+            print(f"Spanish model status: {'Ready' if es_model else 'Failed to download'}")
+            
+            # Print model locations for clarity
+            print("\nSPEECH MODELS IN USE:")
+            print(f"- English voice-to-text: {en_model}")
+            print(f"- Spanish voice-to-text: {es_model}")
+            print(f"- Text-to-speech: Windows SAPI5 voices via pyttsx3\n")
+        except Exception as e:
+            print(f"Error in preloading models: {str(e)}")
+    
+    # Start thread
+    download_thread = threading.Thread(target=download_all_models)
+    download_thread.daemon = True
+    download_thread.start()
+
 # Initialize TTS engine
 engine = None
 
@@ -102,8 +135,8 @@ def convert_webm_to_wav(webm_path):
         except Exception as e:
             print(f"Pydub conversion failed: {e}")
         
-        # Last resort: direct Google Streaming Recognition
-        print("All conversion methods failed. Using direct streaming recognition instead.")
+        # No fallback to online services - we want 100% offline for all languages
+        print("All conversion methods failed. Cannot process audio.")
         return None
     except Exception as e:
         print(f"Error converting WebM to WAV: {e}")
@@ -138,25 +171,35 @@ def download_model_if_needed(language='en'):
     models_dir = Path("web_app/models")
     models_dir.mkdir(exist_ok=True)
     
-    # Define model URLs for different languages
-    model_urls = {
-        'en': "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
-        'es': "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip"
-    }
+    # Define model names and URLs
+    if language == 'en':
+        model_name = "vosk-model-small-en-us-0.15"
+        model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+    elif language == 'es':
+        # Using the full Spanish model for better recognition
+        model_name = "vosk-model-small-es-0.42"
+        model_url = "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip"
+    else:
+        # Default to English
+        model_name = "vosk-model-small-en-us-0.15"
+        model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
     
-    # Get appropriate URL
-    model_url = model_urls.get(language, model_urls['en'])
-    model_name = f"vosk-model-small-{language}"
     model_path = models_dir / model_name
     
-    # Check if model already exists
+    print(f"Checking for Vosk model for language: {language}")
+    
+    # model_name and model_url are already set above based on language
+    print(f"Using model name: {model_name}")
+    print(f"Using model URL: {model_url}")
+    
+    # Check if model already exists - NEVER force redownload
     if model_path.exists():
-        print(f"Model {model_name} already exists")
+        print(f"Model {model_name} already exists at {model_path}")
         return str(model_path)
     
     # Download and extract model
     zip_path = models_dir / f"{model_name}.zip"
-    print(f"Downloading model {model_name}...")
+    print(f"Downloading model {model_name} from {model_url}...")
     
     try:
         # Download with progress reporting
@@ -193,12 +236,28 @@ def download_model_if_needed(language='en'):
 
 def transcribe_audio_file(file_path, language='en-US'):
     """Transcribe audio using Vosk for 100% offline speech recognition."""
+    import os
+    from pathlib import Path
+    import json
+    import time
     
     print(f"Attempting to transcribe file: {file_path}")
     print(f"Using language: {language}")
     
-    # Determine language code for model
-    lang_code = 'en' if language.startswith('en') else 'es'
+    # Strict language detection
+    # This is critical for proper model selection
+    if language == 'es-ES':
+        lang_code = 'es'
+        print("============================================")
+        print("SPANISH LANGUAGE SELECTED")
+        print("============================================")
+    else:
+        lang_code = 'en'
+        print("============================================")
+        print("ENGLISH LANGUAGE SELECTED")
+        print("============================================")
+    
+    print(f"Selected language code: {lang_code}")
     
     # If file is WebM format, try to convert it to WAV first
     if file_path.lower().endswith('.webm'):
@@ -229,10 +288,32 @@ def transcribe_audio_file(file_path, language='en-US'):
         
         print(f"Using Vosk model at: {model_path}")
         
-        # Load the model
-        model = vosk.Model(model_path)
+        # For Spanish recognition
+        if lang_code == 'es':
+            print("*** USING SPANISH RECOGNITION WORKFLOW ***")
+            
+            # Use the existing Spanish model without forcing redownload
+            # This avoids unnecessary downloads and speeds up startup
+            print("Using existing Spanish model if available...")
+            model_path = download_model_if_needed('es')  # Will NOT force redownload
+            if not model_path or not os.path.exists(model_path):
+                return "Error: Could not find or download Spanish speech recognition model"
+                
+            print(f"Using Spanish Vosk model at: {model_path}")
+            
+            # Load the Spanish model with simple configuration
+            try:
+                model = vosk.Model(model_path)
+                print("Spanish model loaded successfully")
+            except Exception as model_error:
+                print(f"Error loading Spanish model: {model_error}")
+                return f"Error: Could not load Spanish speech model: {str(model_error)}"
+        else:
+            # Standard English model loading
+            print(f"Using English Vosk model at: {model_path}")
+            model = vosk.Model(model_path)
+            print("English model loaded successfully")
         
-        # Open the WAV file
         try:
             wf = wave.open(file_path, "rb")
         except Exception as wav_error:
@@ -246,26 +327,66 @@ def transcribe_audio_file(file_path, language='en-US'):
             
         print(f"Audio file details: rate={wf.getframerate()}, channels={wf.getnchannels()}, width={wf.getsampwidth()}")
         
-        # Create recognizer
+        # Create recognizer - simplified approach for both languages
+        # We're using the exact same approach for both languages now
+        # This avoids any configuration issues that might be causing problems
+        print(f"Creating {lang_code} recognizer with standard settings")
         rec = vosk.KaldiRecognizer(model, wf.getframerate())
         
-        # Process audio
+        # Enable word timestamps for both languages
+        # This is helpful for timing information but doesn't affect recognition
+        rec.SetWords(True)
+        
+        print(f"{lang_code} recognizer ready for processing")
+            
+        # Process audio with careful handling
         result_text = ""
-        while True:
-            data = wf.readframes(4000)  # Read 4000 frames at a time
-            if len(data) == 0:
-                break
-            rec.AcceptWaveform(data)
+        try:
+            print("Processing audio data...")
+            while True:
+                data = wf.readframes(4000)  # Read 4000 frames at a time
+                if len(data) == 0:
+                    break
+                rec.AcceptWaveform(data)
+            print("Finished processing audio data")
+        except Exception as proc_error:
+            print(f"Error during audio processing: {proc_error}")
+            return f"Error processing audio: {proc_error}"
             
         # Get the final result
         result_json = json.loads(rec.FinalResult())
         result_text = result_json.get("text", "")
         
-        print(f"Vosk recognition result: '{result_text}'")
+        # Record language used for debugging
+        print(f"Vosk recognition result ({lang_code}): '{result_text}'")
+        print(f"Full recognition result: {result_json}")
         
-        # Check if result is empty
-        if not result_text or len(result_text.strip()) == 0:
-            return "Error: No speech detected. Try speaking louder or more clearly."
+        # Verify the transcription made sense for the language
+        if lang_code == 'es' and not result_text:
+            print("WARNING: Empty result from Spanish model - this likely indicates a model loading issue.")
+        elif lang_code == 'es':
+            print("Spanish transcription completed. If you see English-like words, there might be an issue with language detection.")
+        
+        # Check language-specific handling of results
+        if lang_code == 'es':
+            # Special handling for Spanish results
+            if not result_text or len(result_text.strip()) == 0:
+                print("No Spanish text detected in the audio")
+                return "Error: No Spanish speech detected. Try speaking louder or more clearly."
+            
+            # Look for signs that English was incorrectly detected
+            english_words = ['the', 'and', 'or', 'but', 'for', 'with', 'your', 'this', 'that']
+            word_count = len(result_text.split())
+            english_word_count = sum(1 for word in result_text.lower().split() if word in english_words)
+            
+            # If more than 30% of words are common English words, something's wrong
+            if word_count > 3 and english_word_count / word_count > 0.3:
+                print(f"WARNING: Detected {english_word_count}/{word_count} English words in Spanish audio")
+                return "Error: La detección de voz en español no funcionó correctamente. Por favor, intente de nuevo."
+        else:
+            # Standard handling for English
+            if not result_text or len(result_text.strip()) == 0:
+                return "Error: No speech detected. Try speaking louder or more clearly."
             
         return result_text
         
@@ -312,11 +433,19 @@ def index():
 def upload_audio():
     """Handle audio file upload for speech recognition."""
     try:
-        print("Audio upload request received")
+        print("\n\n============= NEW AUDIO UPLOAD REQUEST =============\n\n")
         
-        # Check if language was specified
-        language = request.form.get('language', 'en-US')
-        print(f"Selected language: {language}")
+        # Check if language was specified - handle with more robust language detection
+        language = request.form.get('language', 'en-US').strip()
+        # Make sure language code is properly formatted using a unified approach
+        if language.lower() in ['spanish', 'español', 'es', 'es-es', 'es-mx', 'es-ar', 'es-co']:
+            language = 'es-ES'
+            print("SPANISH LANGUAGE REQUESTED")
+        else:
+            language = 'en-US'
+            print("ENGLISH LANGUAGE REQUESTED OR DEFAULTED")
+            
+        print(f"Final language parameter: {language}")
         
         # Check if the post request has the file part
         if 'audio' not in request.files:
@@ -437,5 +566,8 @@ def synthesize():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-if __name__ == '__main__':
+# Start preloading speech models at application startup
+preload_speech_models()
+
+if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
