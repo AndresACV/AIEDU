@@ -13,9 +13,10 @@ An advanced Retrieval-Augmented Generation (RAG) system with comprehensive speec
 ## ✨ Features
 
 - **🗣️ Complete Speech Interaction**: Fully functional text-to-speech and speech-to-text capabilities
-- **🌐 Multilingual Support**: Works with both English and Spanish languages
+- **🌐 Multilingual Support**: Works with both English and Spanish languages with easy language selection
 - **💻 100% Offline Processing**: Uses local models for privacy and reliability
 - **🔊 Real-time Audio Visualization**: Interactive volume display for user feedback
+- **🔄 Client-side Audio Processing**: Robust Web Audio API implementation for WAV conversion
 - **🧩 Modular Architecture**: Designed for easy extension and enhancement
 - **🌟 Web-based Interface**: User-friendly Flask application for all functionalities
 
@@ -94,14 +95,23 @@ Use the web interface to:
 
 ### 🎧 Speech-to-Text
 - Offline speech recognition using Vosk models (based on Kaldi)
-- Support for both English and Spanish
+- Support for both English and Spanish with dedicated language selector
 - Audio volume visualization with Web Audio API
-- Client-side audio format conversion
+- Robust client-side audio format conversion (WebM to WAV)
+- Error handling and comprehensive user feedback
 - Automatic model download and installation
 
 ## 🔍 Current Status
 
-Both the text-to-speech and speech-to-text components have been implemented with a web-based interface. The system provides high-quality voice synthesis and robust offline speech recognition.
+The system now features a fully functional voice interaction pipeline with the following recent improvements:
+
+- ✅ Robust client-side audio recording and WAV conversion
+- ✅ Language selection dropdown for speech recognition (English/Spanish)
+- ✅ Improved error handling and user feedback for voice recording
+- ✅ Enhanced .gitignore to exclude sensitive data and temporary files
+- ✅ Clean repository structure with documentation isolated from version control
+
+Both the text-to-speech and speech-to-text components are now stable and production-ready with a user-friendly web interface.
 
 ## 🛣️ Roadmap
 

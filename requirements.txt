@@ -1,16 +1,26 @@
-torch>=1.10.0
-torchaudio>=0.10.0
+# Core dependencies
+flask>=2.0.1
+pyaudio>=0.2.11
+pyttsx3>=2.90
+SpeechRecognition>=3.8.1
+vosk>=0.3.45
+werkzeug>=2.0.1
+
+# Audio processing
+pydub>=0.25.1
 numpy>=1.20.0
 scipy>=1.7.0
 librosa>=0.8.1
 soundfile>=0.10.3
-matplotlib>=3.5.0
+
+# RAG System Components
+sentence-transformers>=2.2.2  # For embedding generation
+chromadb>=0.4.6              # Vector database
+faiss-cpu>=1.7.4             # Alternative vector database (optional)
+llama-cpp-python>=0.1.77     # For local LLM inference with vicuna model
+langchain>=0.0.267           # For RAG pipeline components
+
+# Utils
 tqdm>=4.62.0
-transformers>=4.15.0
-datasets>=1.18.0
-tensorboard>=2.7.0
-coqui-tts>=0.10.0
-omegaconf>=2.1.1
-hydra-core>=1.1.0
-lmdb>=1.3.0
-wandb>=0.12.0
+matplotlib>=3.5.0
+pandas>=1.3.5

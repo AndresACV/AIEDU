@@ -174,10 +174,26 @@ cython_debug/
 .pypirc
 
 # Windsurf IDE documentation files
-windsurf_docs/
+# windsurf_docs/
 
 # Generated audio files
 web_app/static/audio/
+web_app/static/uploads/
 
-# Ignore ML models
+# Speech recognition models (large files)
 web_app/models/
+
+# Chroma DB files
+.chroma/
+chroma_db/
+vector_db/
+
+# Local credentials and sensitive data
+*.key
+*.pem
+*.crt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
