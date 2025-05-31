@@ -74,10 +74,59 @@ def init_rag_components():
             rag_pipeline = None
 
 def get_engine():
-    """Get or initialize the TTS engine."""
+    """Get or initialize the TTS engine with proper driver selection for WSL."""
     global engine
     if engine is None:
-        engine = pyttsx3.init()
+        import platform
+        system = platform.system()
+        
+        print(f"Initializing TTS on {system}...")
+        
+        # Check for espeak on Linux/WSL first
+        if system == 'Linux':
+            try:
+                import subprocess
+                result = subprocess.run(['which', 'espeak'], capture_output=True)
+                if result.returncode != 0:
+                    print("❌ espeak not found! Install with:")
+                    print("sudo apt update && sudo apt install -y espeak espeak-data libespeak1")
+            except:
+                pass
+        
+        # Try drivers in order
+        drivers = ['espeak', 'sapi5', 'nsss'] if system == 'Linux' else ['sapi5', 'espeak', 'nsss']
+        
+        for driver in drivers:
+            try:
+                print(f"Trying TTS driver: {driver}")
+                test_engine = pyttsx3.init(driver)
+                if test_engine:
+                    voices = test_engine.getProperty('voices')
+                    if voices and len(voices) > 0:
+                        print(f"✅ {driver} working with {len(voices)} voices")
+                        engine = test_engine
+                        return engine
+                    else:
+                        print(f"❌ {driver} has no voices")
+            except Exception as e:
+                print(f"❌ {driver} failed: {e}")
+        
+        # Last resort: try default
+        try:
+            print("Trying default TTS...")
+            engine = pyttsx3.init()
+            if engine and engine.getProperty('voices'):
+                print("✅ Default TTS working")
+                return engine
+        except Exception as e:
+            print(f"❌ Default TTS failed: {e}")
+        
+        # All failed
+        error_msg = "No TTS engine working!"
+        if system == 'Linux':
+            error_msg += "\nInstall espeak: sudo apt install -y espeak espeak-data libespeak1"
+        raise Exception(error_msg)
+    
     return engine
 
 
@@ -623,22 +672,61 @@ def transcribe_audio_file(file_path, language='en-US'):
 # Removed API-based direct_streaming_recognition function
 
 def get_available_voices():
-    """Get all available TTS voices."""
+    """Get available TTS voices - one English (US) and one Spanish (Latin America) only."""
     e = get_engine()
     voices = e.getProperty('voices')
     
-    available_voices = []
-    for voice in voices:
-        # Extract information about the voice
-        voice_info = {
-            'id': voice.id,
-            'name': voice.name if hasattr(voice, 'name') else voice.id.split('\\')[-1],
-            'languages': voice.languages if hasattr(voice, 'languages') else [],
-            'gender': voice.gender if hasattr(voice, 'gender') else None,
-            'age': voice.age if hasattr(voice, 'age') else None,
-        }
-        available_voices.append(voice_info)
+    english_voice = None
+    spanish_voice = None
     
+    for voice in voices:
+        voice_name = voice.name if hasattr(voice, 'name') else voice.id.split('\\')[-1]
+        voice_id = voice.id
+        languages = voice.languages if hasattr(voice, 'languages') else []
+        
+        # Convert languages to strings for easier checking
+        lang_strings = [str(lang).lower() for lang in languages]
+        voice_name_lower = voice_name.lower()
+        
+        # Look for Spanish voice (prioritize Latin American Spanish)
+        if not spanish_voice:
+            is_spanish = any('es' in lang or 'spanish' in lang for lang in lang_strings) or \
+                        'spanish' in voice_name_lower or 'español' in voice_name_lower or \
+                        'mexico' in voice_name_lower or 'latin' in voice_name_lower or \
+                        'sabina' in voice_name_lower or 'es_' in voice_name_lower
+            if is_spanish:
+                spanish_voice = {
+                    'id': voice_id,
+                    'name': 'Spanish (Latin America)',
+                    'language_type': 'Spanish',
+                    'languages': languages
+                }
+        
+        # Look for English US voice
+        if not english_voice:
+            is_english_us = any('en' in lang and ('us' in lang or 'united' in lang) for lang in lang_strings) or \
+                           ('english' in voice_name_lower and ('us' in voice_name_lower or 'united' in voice_name_lower)) or \
+                           'david' in voice_name_lower or 'zira' in voice_name_lower
+            if is_english_us:
+                english_voice = {
+                    'id': voice_id,
+                    'name': 'English (US)',
+                    'language_type': 'English',
+                    'languages': languages
+                }
+        
+        # Stop searching if we found both
+        if spanish_voice and english_voice:
+            break
+    
+    # Build the final list with Spanish first (as default)
+    available_voices = []
+    if spanish_voice:
+        available_voices.append(spanish_voice)
+    if english_voice:
+        available_voices.append(english_voice)
+    
+    print(f"Available voices: {[v['name'] for v in available_voices]}")
     return available_voices
 
 @app.route('/')
@@ -750,41 +838,165 @@ def voices():
 
 @app.route('/synthesize', methods=['POST'])
 def synthesize():
-    """Convert text to speech."""
+    """Convert text to speech with enhanced error handling for WSL."""
     try:
         data = request.json
         text = data.get('text', '')
         voice_id = data.get('voice_id', '')
         
+        print(f"TTS Request - Text: '{text}', Voice ID: '{voice_id}'")
+        
         if not text:
             return jsonify({'success': False, 'error': 'No text provided'})
         
-        # Initialize the TTS engine
-        e = get_engine()
-        
-        # Set voice if specified
-        if voice_id:
-            e.setProperty('voice', voice_id)
-        
-        # Set properties
-        e.setProperty('rate', 170)  # Speed
-        e.setProperty('volume', 0.9)  # Volume (0.0 to 1.0)
-        
-        # Create a unique filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_id = str(uuid.uuid4())[:8]
-        filename = f"speech_{timestamp}_{unique_id}.wav"
-        output_path = os.path.join(AUDIO_FOLDER, filename)
-        
-        # Generate speech
-        e.save_to_file(text, output_path)
-        e.runAndWait()
-        
-        # Return the URL to the audio file
-        audio_url = f"/static/audio/{filename}"
-        return jsonify({'success': True, 'audio_url': audio_url})
+        # Create a fresh TTS engine for this specific request
+        try:
+            print("Creating fresh TTS engine...")
+            # Use direct pyttsx3.init() to avoid the global engine cache
+            import pyttsx3
+            e = pyttsx3.init()
+            
+            if not e:
+                return jsonify({'success': False, 'error': 'Could not create TTS engine'})
+            
+            # Get available voices
+            voices = e.getProperty('voices')
+            print(f"TTS engine has {len(voices) if voices else 0} voices")
+            
+            # Set voice if specified
+            if voice_id and voices:
+                voice_found = False
+                for voice in voices:
+                    if voice.id == voice_id:
+                        print(f"Setting voice: {voice.name}")
+                        e.setProperty('voice', voice_id)
+                        voice_found = True
+                        break
+                
+                if not voice_found:
+                    print(f"Voice {voice_id} not found, using default")
+            
+            # Set properties for clear speech
+            e.setProperty('rate', 150)  # Speech rate
+            e.setProperty('volume', 1.0)  # Max volume
+            
+            # Create a unique filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_id = str(uuid.uuid4())[:8]
+            filename = f"speech_{timestamp}_{unique_id}.wav"
+            output_path = os.path.join(AUDIO_FOLDER, filename)
+            
+            print(f"Generating speech file: {output_path}")
+            print(f"Text length: {len(text)} characters")
+            
+            # Generate speech with error handling
+            try:
+                # For WSL/Linux, force espeak to output to file
+                import platform
+                if platform.system() == 'Linux':
+                    print("Using direct espeak file output for WSL")
+                    import subprocess
+                    
+                    # Determine espeak voice based on selected voice_id
+                    espeak_voice = 'es-la'  # Default to Spanish Latin America
+                    
+                    if voice_id and voices:
+                        for voice in voices:
+                            if voice.id == voice_id:
+                                voice_name = voice.name.lower() if hasattr(voice, 'name') else ''
+                                print(f"Selected voice: {voice.name}")
+                                
+                                # Map to better espeak voices
+                                if 'spanish' in voice_name or 'español' in voice_name:
+                                    espeak_voice = 'es-la'  # Spanish Latin America (better quality)
+                                    print("Using Spanish Latin America espeak voice")
+                                elif 'english' in voice_name:
+                                    espeak_voice = 'en+f3'  # English female variant 3 (softer)
+                                    print("Using English espeak voice")
+                                break
+                    
+                    # Clean espeak parameters for natural speech
+                    cmd = [
+                        'espeak',
+                        '-v', espeak_voice,      # Voice/language
+                        '-w', output_path,       # Write to WAV file
+                        '-s', '175',             # Fixed speed for consistency
+                        '-a', '120',             # Fixed amplitude
+                        '-p', '48',              # Fixed pitch
+                        '-g', '2',               # Small gaps between words
+                        '-z',                    # No final sentence pause
+                        text
+                    ]
+                    
+                    print(f"espeak command: {' '.join(cmd[:8])} [text]")
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        print("Direct espeak generation successful")
+                    else:
+                        print(f"espeak error: {result.stderr}")
+                        raise Exception(f"espeak failed: {result.stderr}")
+                else:
+                    # Use pyttsx3 for Windows
+                    e.save_to_file(text, output_path)
+                    print("save_to_file completed")
+                    e.runAndWait()
+                    print("runAndWait completed")
+                    
+            except Exception as tts_error:
+                print(f"TTS generation error: {tts_error}")
+                return jsonify({'success': False, 'error': f'TTS generation failed: {str(tts_error)}'})
+            
+            # Wait for file to be fully written
+            import time
+            time.sleep(1.0)  # Increased wait time
+            
+            # Check if file was created successfully
+            if os.path.exists(output_path):
+                file_size = os.path.getsize(output_path)
+                print(f"Speech file exists with size: {file_size} bytes")
+                
+                if file_size > 100:  # Minimum reasonable file size
+                    # Try to get audio duration for debugging
+                    try:
+                        import wave
+                        with wave.open(output_path, 'rb') as wav_file:
+                            frames = wav_file.getnframes()
+                            rate = wav_file.getframerate()
+                            duration = frames / float(rate)
+                            print(f"Audio duration: {duration:.2f} seconds")
+                            
+                            if duration < 0.1:  # Less than 100ms is suspicious
+                                print("WARNING: Audio duration is very short!")
+                    except Exception as wave_error:
+                        print(f"Could not analyze audio file: {wave_error}")
+                    
+                    # Return the URL to the audio file
+                    audio_url = f"/static/audio/{filename}"
+                    print(f"Success! Audio URL: {audio_url}")
+                    return jsonify({
+                        'success': True, 
+                        'audio_url': audio_url, 
+                        'message': 'Audio generated successfully',
+                        'file_size': file_size
+                    })
+                else:
+                    print(f"Speech file too small ({file_size} bytes), likely empty")
+                    return jsonify({'success': False, 'error': 'Generated audio file is empty or corrupted'})
+            else:
+                print("Speech file was not created")
+                return jsonify({'success': False, 'error': 'Failed to generate speech file'})
+                
+        except Exception as engine_error:
+            print(f"TTS Engine Error: {engine_error}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': f'TTS engine error: {str(engine_error)}'})
         
     except Exception as e:
+        print(f"TTS Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 # Configure basic logging
@@ -1227,31 +1439,184 @@ def rag_to_speech():
         if use_memory:
             conversation_memory.add_interaction(query, answer_text)
         
-        # Generate speech from answer
-        engine = get_engine()
-        
-        # Set voice if provided
-        if voice_id:
-            engine.setProperty('voice', voice_id)
-        
-        # Generate unique filename
-        audio_filename = f"{uuid.uuid4()}.mp3"
-        audio_path = os.path.join(AUDIO_FOLDER, audio_filename)
-        
-        # Generate speech file
-        engine.save_to_file(answer_text, audio_path)
-        engine.runAndWait()
-        
-        # Return results
-        audio_url = f"/static/audio/{audio_filename}"
-        return jsonify({
-            'success': True,
-            'query': query,
-            'answer': answer_text,
-            'audio_url': audio_url,
-            'retrieved_documents': rag_response.get('retrieved_documents', []),
-            'metrics': rag_response.get('metrics', {})
-        })
+        # Generate speech from answer using enhanced TTS
+        try:
+            print("Creating fresh TTS engine for RAG response...")
+            engine = get_engine()
+            
+            # Get available voices for debugging
+            voices = engine.getProperty('voices')
+            print(f"Available voices for RAG: {len(voices) if voices else 0}")
+            
+            # Set voice if provided and valid
+            if voice_id and voices:
+                voice_found = False
+                for voice in voices:
+                    if voice.id == voice_id:
+                        print(f"Setting RAG voice to: {voice.name} ({voice_id})")
+                        engine.setProperty('voice', voice_id)
+                        voice_found = True
+                        break
+                
+                if not voice_found:
+                    print(f"RAG Voice ID {voice_id} not found, using default")
+                    if voices and len(voices) > 0:
+                        fallback_voice = voices[0].id
+                        print(f"Using fallback RAG voice: {voices[0].name} ({fallback_voice})")
+                        engine.setProperty('voice', fallback_voice)
+            else:
+                print("No voice specified for RAG response, using default")
+            
+            # Set speech properties for better quality
+            engine.setProperty('rate', 140)  # Slower for clarity
+            engine.setProperty('volume', 1.0)  # Maximum volume
+            
+            # Generate unique filename (use WAV for better compatibility)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_id = str(uuid.uuid4())[:8]
+            audio_filename = f"rag_{timestamp}_{unique_id}.wav"
+            audio_path = os.path.join(AUDIO_FOLDER, audio_filename)
+            
+            print(f"Generating RAG speech file: {audio_path}")
+            print(f"Text to speak ({len(answer_text)} chars): '{answer_text[:100]}{'...' if len(answer_text) > 100 else ''}'")
+            
+            # Generate speech file with error handling
+            try:
+                # For WSL/Linux, use direct espeak
+                import platform
+                if platform.system() == 'Linux':
+                    print("Using direct espeak for RAG response")
+                    import subprocess
+                    
+                    # Determine espeak voice for RAG
+                    espeak_voice = 'es-la'  # Default to Spanish Latin America for RAG
+                    
+                    if voice_id and voices:
+                        for voice in voices:
+                            if voice.id == voice_id:
+                                voice_name = voice.name.lower() if hasattr(voice, 'name') else ''
+                                print(f"RAG using voice: {voice.name}")
+                                
+                                if 'english' in voice_name:
+                                    espeak_voice = 'en+f3'
+                                elif 'spanish' in voice_name or 'español' in voice_name:
+                                    espeak_voice = 'es-la'
+                                break
+                    
+                    # Clean espeak for RAG responses
+                    cmd = [
+                        'espeak',
+                        '-v', espeak_voice,      # Voice/language  
+                        '-w', audio_path,        # Write to WAV file
+                        '-s', '170',             # Slightly slower for longer responses
+                        '-a', '120',             # Fixed amplitude
+                        '-p', '48',              # Fixed pitch
+                        '-g', '2',               # Small gaps for flow
+                        '-z',                    # No final pause
+                        answer_text
+                    ]
+                    
+                    print(f"RAG espeak: {espeak_voice} voice")
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        print("Direct espeak RAG generation successful")
+                    else:
+                        print(f"RAG espeak error: {result.stderr}")
+                        raise Exception(f"espeak failed: {result.stderr}")
+                else:
+                    # Use pyttsx3 for Windows
+                    engine.save_to_file(answer_text, audio_path)
+                    print("RAG save_to_file completed")
+                    engine.runAndWait()
+                    print("RAG runAndWait completed")
+                    
+            except Exception as tts_error:
+                print(f"RAG TTS generation error: {tts_error}")
+                # Continue without audio but return the text response
+                return jsonify({
+                    'success': True,
+                    'query': query,
+                    'answer': answer_text,
+                    'audio_url': None,
+                    'error': f'TTS generation failed: {str(tts_error)}',
+                    'retrieved_documents': rag_response.get('retrieved_documents', []),
+                    'metrics': rag_response.get('metrics', {})
+                })
+            
+            # Wait for file to be written
+            import time
+            time.sleep(1.0)  # Increased wait time
+            
+            # Check if file was created
+            if os.path.exists(audio_path):
+                file_size = os.path.getsize(audio_path)
+                print(f"RAG speech file exists with size: {file_size} bytes")
+                
+                if file_size > 100:  # Minimum reasonable file size
+                    # Try to get audio duration for debugging
+                    try:
+                        import wave
+                        with wave.open(audio_path, 'rb') as wav_file:
+                            frames = wav_file.getnframes()
+                            rate = wav_file.getframerate()
+                            duration = frames / float(rate)
+                            print(f"RAG Audio duration: {duration:.2f} seconds")
+                            
+                            if duration < 0.1:
+                                print("WARNING: RAG Audio duration is very short!")
+                    except Exception as wave_error:
+                        print(f"Could not analyze RAG audio file: {wave_error}")
+                    
+                    audio_url = f"/static/audio/{audio_filename}"
+                    print(f"Success! RAG Audio URL: {audio_url}")
+                    
+                    return jsonify({
+                        'success': True,
+                        'query': query,
+                        'answer': answer_text,
+                        'audio_url': audio_url,
+                        'file_size': file_size,
+                        'retrieved_documents': rag_response.get('retrieved_documents', []),
+                        'metrics': rag_response.get('metrics', {})
+                    })
+                else:
+                    print(f"RAG speech file too small ({file_size} bytes), likely empty")
+                    return jsonify({
+                        'success': True,
+                        'query': query,
+                        'answer': answer_text,
+                        'audio_url': None,
+                        'error': 'Generated audio file is empty or corrupted',
+                        'retrieved_documents': rag_response.get('retrieved_documents', []),
+                        'metrics': rag_response.get('metrics', {})
+                    })
+            else:
+                print("RAG speech file was not created")
+                return jsonify({
+                    'success': True,
+                    'query': query,
+                    'answer': answer_text,
+                    'audio_url': None,
+                    'error': 'Failed to generate speech file',
+                    'retrieved_documents': rag_response.get('retrieved_documents', []),
+                    'metrics': rag_response.get('metrics', {})
+                })
+                
+        except Exception as tts_engine_error:
+            print(f"RAG TTS Engine Error: {tts_engine_error}")
+            import traceback
+            traceback.print_exc()
+            # Still return the text response even if TTS fails
+            return jsonify({
+                'success': True,
+                'query': query,
+                'answer': answer_text,
+                'audio_url': None,
+                'error': f'TTS engine error: {str(tts_engine_error)}',
+                'retrieved_documents': rag_response.get('retrieved_documents', []),
+                'metrics': rag_response.get('metrics', {})
+            })
         
     except Exception as e:
         logger.error(f"Error in RAG to speech pipeline: {e}")

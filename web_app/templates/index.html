@@ -61,7 +61,7 @@
                                     <div class="col-md-4">
                                         <select class="form-select" id="rag-voice-select">
                                             <!-- Voice options will be populated from server -->
-                                            <option value="">Select voice (optional)</option>
+                                            <option value="">Spanish (Default)</option>
                                         </select>
                                     </div>
                                     <div class="col-md-4 text-center">
@@ -931,20 +931,33 @@
                 if (!voiceSelect) return; // Skip if element doesn't exist
                 
                 // Clear existing options
-                voiceSelect.innerHTML = '<option value="">Default voice</option>';
+                voiceSelect.innerHTML = '<option value="">Spanish (Default)</option>';
                 
                 // Fetch available voices from the server
                 fetch('/voices')
                     .then(response => response.json())
                     .then(data => {
                         if (data.success && data.voices && data.voices.length > 0) {
+                            let spanishVoice = null;
+                            
                             // Add each voice as an option
                             data.voices.forEach(voice => {
                                 const option = document.createElement('option');
                                 option.value = voice.id;
                                 option.text = voice.name;
                                 voiceSelect.appendChild(option);
+                                
+                                // Find Spanish voice for default selection
+                                if (voice.language_type === 'Spanish') {
+                                    spanishVoice = voice.id;
+                                }
                             });
+                            
+                            // Automatically select Spanish voice as default
+                            if (spanishVoice) {
+                                voiceSelect.value = spanishVoice;
+                                console.log('TTS Spanish voice set as default:', spanishVoice);
+                            }
                         }
                     })
                     .catch(error => console.error('Error loading TTS voices:', error));
@@ -1045,20 +1058,37 @@
             const voiceSelect = document.getElementById('rag-voice-select');
             if (!voiceSelect) return; // Skip if element doesn't exist
             
-            voiceSelect.innerHTML = '<option value="">Select voice (optional)</option>';
+            voiceSelect.innerHTML = '<option value="">Spanish (Default)</option>';
             
             // Fetch voices from server
             fetch('/voices')
                 .then(response => response.json())
                 .then(data => {
+                    console.log('Available voices:', data);
+                    
                     if (data.success && data.voices && data.voices.length > 0) {
-                        // Add each voice to dropdown
+                        let spanishVoice = null;
+                        
+                        // Add each voice to dropdown and find Spanish voice
                         data.voices.forEach(voice => {
                             const option = document.createElement('option');
                             option.value = voice.id;
                             option.text = voice.name;
                             voiceSelect.appendChild(option);
+                            
+                            // Find Spanish voice for default selection
+                            if (voice.language_type === 'Spanish') {
+                                spanishVoice = voice.id;
+                            }
                         });
+                        
+                        // Automatically select Spanish voice as default
+                        if (spanishVoice) {
+                            voiceSelect.value = spanishVoice;
+                            console.log('Spanish voice set as default:', spanishVoice);
+                        }
+                    } else {
+                        console.error('No voices received from server');
                     }
                 })
                 .catch(error => console.error('Error loading voices:', error));
@@ -1211,8 +1241,41 @@
         
         // Function to play audio
         function playAudio(url) {
+            console.log('Playing audio:', url);
             const audio = new Audio(url);
-            audio.play();
+            
+            audio.onloadstart = function() {
+                console.log('Audio loading started');
+            };
+            
+            audio.oncanplay = function() {
+                console.log('Audio can start playing');
+            };
+            
+            audio.onerror = function(e) {
+                console.error('Audio playback error:', e);
+                console.error('Audio error details:', this.error);
+            };
+            
+            audio.onended = function() {
+                console.log('Audio playback finished');
+            };
+            
+            // Attempt to play
+            audio.play().then(() => {
+                console.log('Audio playback started successfully');
+            }).catch(error => {
+                console.error('Failed to play audio:', error);
+                // Try alternative approach
+                const audioElement = document.createElement('audio');
+                audioElement.src = url;
+                audioElement.controls = true;
+                audioElement.autoplay = true;
+                document.body.appendChild(audioElement);
+                setTimeout(() => {
+                    document.body.removeChild(audioElement);
+                }, 5000);
+            });
         }
         
         // Function to stop RAG voice recording
