@@ -1,58 +1,67 @@
 """
 LLM integration module for the RAG System.
-Uses llama-cpp-python to interact with the quantized vicuna model.
+Uses Ollama API to interact with local LLM models.
 """
 
 import os
 import logging
 from typing import Dict, Any, Optional, List
 import time
+import requests
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class LLMInference:
-    """Class for running inference with a quantized LLM model."""
+class OllamaLLMInference:
+    """Class for running inference with Ollama API."""
     
-    def __init__(self, model_path: str = "web_app/models/vicuna-7b-v1.3.ggmlv3.q4_K_S.bin"):
+    def __init__(self, 
+                 model_name: str = "mistral:7b",
+                 api_url: str = "http://localhost:11434"):
         """
-        Initialize the LLM inference engine.
+        Initialize the Ollama LLM inference engine.
         
         Args:
-            model_path: Path to the quantized model file (.bin)
+            model_name: Name of the Ollama model (e.g., "mistral:7b")
+            api_url: Ollama API base URL
         """
-        logger.info(f"Initializing LLM with model: {model_path}")
-        self.model_path = model_path
+        logger.info(f"Initializing Ollama LLM with model: {model_name}")
+        self.model_name = model_name
+        self.api_url = api_url
+        self.generate_url = f"{api_url}/api/generate"
         self.is_mock_mode = False
         
+        # Test Ollama connection
+        if not self._test_ollama_connection():
+            logger.warning("Ollama not available. Using mock responses instead.")
+            self.is_mock_mode = True
+        elif not self._check_model_available():
+            logger.warning(f"Model '{model_name}' not available in Ollama. Using mock responses instead.")
+            self.is_mock_mode = True
+        else:
+            logger.info("Ollama LLM connection established successfully")
+    
+    def _test_ollama_connection(self) -> bool:
+        """Test if Ollama is running and accessible."""
         try:
-            # Import here to avoid early loading of large libraries
-            from llama_cpp import Llama
-            
-            # Check if model exists
-            if not os.path.exists(model_path):
-                logger.warning(f"Model file not found at {model_path}. Using mock responses instead.")
-                self.is_mock_mode = True
-                return
-            
-            # Load the model (with reasonable defaults for CPU inference)
-            self.llm = Llama(
-                model_path=model_path,
-                n_ctx=2048,            # Context window size
-                n_batch=512,           # Batch size for prompt processing
-                n_gpu_layers=0,        # CPU only by default
-                verbose=False          # Reduce console output
-            )
-            
-            logger.info("LLM model loaded successfully")
-            
-        except ImportError:
-            logger.warning("Failed to import llama_cpp. Using mock responses instead.")
-            self.is_mock_mode = True
-        except Exception as e:
-            logger.warning(f"Failed to initialize LLM: {e}. Using mock responses instead.")
-            self.is_mock_mode = True
+            response = requests.get(f"{self.api_url}/api/tags", timeout=5)
+            return response.status_code == 200
+        except requests.exceptions.RequestException:
+            return False
+    
+    def _check_model_available(self) -> bool:
+        """Check if the specified model is available in Ollama."""
+        try:
+            response = requests.get(f"{self.api_url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                available_models = [model["name"] for model in models]
+                return self.model_name in available_models
+            return False
+        except requests.exceptions.RequestException:
+            return False
     
     def generate_response(self, 
                          prompt: str,
@@ -62,7 +71,7 @@ class LLMInference:
                          top_k: int = 40,
                          stop: Optional[List[str]] = None) -> Dict[str, Any]:
         """
-        Generate a response from the LLM.
+        Generate a response from the LLM via Ollama.
         
         Args:
             prompt: Input prompt text
@@ -83,37 +92,60 @@ class LLMInference:
             if self.is_mock_mode:
                 return self._generate_mock_response(prompt)
             
-            # Set default stop words if not provided
-            if stop is None:
-                stop = ["\n\n", "###", "User:", "Human:"]
+            # Prepare Ollama API request
+            payload = {
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "num_predict": max_tokens,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "top_k": top_k
+                }
+            }
             
-            # Generate completion
-            output = self.llm(
-                prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                stop=stop,
-                echo=False  # Don't include prompt in output
+            # Add stop sequences if provided
+            if stop:
+                payload["options"]["stop"] = stop
+            
+            # Make API call to Ollama
+            response = requests.post(
+                self.generate_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=30  # Reduced to 30 second timeout to prevent hanging
             )
+            
+            if response.status_code != 200:
+                logger.error(f"Ollama API error: {response.status_code} - {response.text}")
+                return self._generate_mock_response(prompt)
+            
+            # Parse response
+            result_data = response.json()
+            generated_text = result_data.get("response", "").strip()
             
             # Calculate time taken
             time_taken = time.time() - start_time
             logger.info(f"Response generated in {time_taken:.2f} seconds")
             
-            # Extract and return relevant information
+            # Return result in expected format
             result = {
-                "text": output["choices"][0]["text"].strip(),
-                "tokens_used": output["usage"]["total_tokens"],
+                "text": generated_text,
+                "tokens_used": len(generated_text.split()),  # Approximate token count
                 "time_taken": time_taken
             }
             
             return result
             
+        except requests.exceptions.Timeout:
+            logger.error("Ollama API timeout")
+            return self._generate_mock_response(prompt)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ollama API request failed: {e}")
+            return self._generate_mock_response(prompt)
         except Exception as e:
             logger.error(f"Error generating LLM response: {e}")
-            # Fallback to mock response in case of error
             return self._generate_mock_response(prompt)
     
     def create_rag_prompt(self, 
@@ -142,20 +174,18 @@ class LLMInference:
         # Combine context documents
         context_text = "\n\n".join([f"Document: {doc}" for doc in context_docs])
         
-        # Format the full prompt
-        prompt = f"""[System] {system_prompt}
+        # Format the full prompt for Mistral-style instruction following
+        prompt = f"""<s>[INST] {system_prompt}
 
-[Context]
+Context:
 {context_text}
 
-[User] {query}
-
-[Assistant]"""
+Question: {query} [/INST]"""
 
         return prompt
 
     def _generate_mock_response(self, prompt: str) -> Dict[str, Any]:
-        """Generate a mock response when the LLM is not available.
+        """Generate a mock response when Ollama is not available.
         
         Args:
             prompt: Input prompt text
@@ -165,20 +195,21 @@ class LLMInference:
         """
         # Extract the user query from the prompt
         query = ""
-        if "[User]" in prompt:
-            query = prompt.split("[User]")[-1].strip()
+        if "Question:" in prompt:
+            query = prompt.split("Question:")[-1].strip()
+            if "[/INST]" in query:
+                query = query.replace("[/INST]", "").strip()
         
         # Generate a simple response based on the query
         mock_responses = [
-            f"I'm sorry, but I cannot provide a detailed answer as the LLM model is not available. "
-            f"Please download the model file '{os.path.basename(self.model_path)}' and place it in the "
-            f"correct directory.",
+            f"I'm sorry, but I cannot provide a detailed answer as Ollama is not running. "
+            f"Please start Ollama and ensure the '{self.model_name}' model is available.",
             
-            f"To use the full RAG capabilities, you'll need to download the LLM model "
-            f"('{os.path.basename(self.model_path)}') and place it in the '{os.path.dirname(self.model_path)}' directory.",
+            f"To use the full RAG capabilities, you'll need to start Ollama and pull the model: "
+            f"'ollama pull {self.model_name}'",
             
-            f"I'm operating in limited mode because the LLM model is missing. Your query was: '{query}'. "
-            f"For complete functionality, please install the required model file."
+            f"I'm operating in limited mode because Ollama is not available. Your query was: '{query}'. "
+            f"For complete functionality, please start Ollama with: 'ollama serve'"
         ]
         
         import random
@@ -197,23 +228,29 @@ class LLMInference:
             "is_mock": True
         }
 
-# Create a singleton instance for application-wide use
-default_llm = None
+    def get_available_models(self) -> List[str]:
+        """Get list of available models in Ollama."""
+        try:
+            response = requests.get(f"{self.api_url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                return [model["name"] for model in models]
+            return []
+        except requests.exceptions.RequestException:
+            return []
 
-def get_llm(model_path: str = "web_app/models/vicuna-7b-v1.3.ggmlv3.q4_K_S.bin"):
+def get_llm(model_name: str = "mistral:7b", api_url: str = "http://localhost:11434"):
     """
-    Get or create the default LLM instance.
+    Get an instance of the Ollama LLM inference engine.
     
     Args:
-        model_path: Optional model path override
+        model_name: Ollama model name (e.g., "mistral:7b")
+        api_url: Ollama API base URL
         
     Returns:
-        LLMInference instance
+        OllamaLLMInference instance
     """
-    global default_llm
-    
-    if default_llm is None:
-        logger.info("Creating new LLM instance")
-        default_llm = LLMInference(model_path)
-    
-    return default_llm
+    return OllamaLLMInference(model_name=model_name, api_url=api_url)
+
+# Maintain backward compatibility
+LLMInference = OllamaLLMInference

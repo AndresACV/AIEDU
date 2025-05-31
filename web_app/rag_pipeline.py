@@ -1,6 +1,6 @@
 """
 RAG (Retrieval-Augmented Generation) pipeline for the AIEDU system.
-Combines embedding generation, vector retrieval, and LLM inference.
+Combines embedding generation, vector retrieval, and LLM inference via Ollama.
 """
 
 import os
@@ -20,24 +20,26 @@ logger = logging.getLogger(__name__)
 class RAGPipeline:
     """
     Main RAG pipeline that connects embedding generation, 
-    vector database retrieval, and LLM inference.
+    vector database retrieval, and LLM inference via Ollama.
     """
     
     def __init__(self,
                 embedding_model: str = 'sentence-transformers/all-MiniLM-L6-v2',
                 collection_name: str = "rag_documents",
                 persist_directory: str = "./vector_db",
-                llm_model_path: str = "web_app/models/vicuna-7b-v1.3.ggmlv3.q4_K_S.bin"):
+                llm_model_name: str = "mistral:7b",
+                ollama_api_url: str = "http://localhost:11434"):
         """
-        Initialize the RAG pipeline.
+        Initialize the RAG pipeline with Ollama integration.
         
         Args:
             embedding_model: Name of the embedding model
             collection_name: Name of the vector store collection
             persist_directory: Directory for vector store persistence
-            llm_model_path: Path to the quantized LLM model
+            llm_model_name: Ollama model name (e.g., "mistral:7b")
+            ollama_api_url: Ollama API base URL
         """
-        logger.info("Initializing RAG pipeline")
+        logger.info("Initializing RAG pipeline with Ollama")
         
         try:
             # Initialize components
@@ -46,7 +48,7 @@ class RAGPipeline:
                 collection_name=collection_name,
                 persist_directory=persist_directory
             )
-            self.llm = get_llm(llm_model_path)
+            self.llm = get_llm(model_name=llm_model_name, api_url=ollama_api_url)
             
             logger.info("RAG pipeline components initialized successfully")
             
@@ -232,15 +234,17 @@ default_rag_pipeline = None
 def get_rag_pipeline(embedding_model: str = 'sentence-transformers/all-MiniLM-L6-v2',
                     collection_name: str = "rag_documents",
                     persist_directory: str = "./vector_db",
-                    llm_model_path: str = "web_app/models/vicuna-7b-v1.3.ggmlv3.q4_K_S.bin"):
+                    llm_model_name: str = "mistral:7b",
+                    ollama_api_url: str = "http://localhost:11434"):
     """
-    Get or create the default RAG pipeline instance.
+    Get or create the default RAG pipeline instance with Ollama integration.
     
     Args:
         embedding_model: Optional embedding model override
         collection_name: Optional vector store collection name override
         persist_directory: Optional vector store directory override
-        llm_model_path: Optional LLM model path override
+        llm_model_name: Ollama model name (e.g., "mistral:7b")
+        ollama_api_url: Ollama API base URL
         
     Returns:
         RAGPipeline instance
@@ -248,12 +252,13 @@ def get_rag_pipeline(embedding_model: str = 'sentence-transformers/all-MiniLM-L6
     global default_rag_pipeline
     
     if default_rag_pipeline is None:
-        logger.info("Creating new RAG pipeline instance")
+        logger.info("Creating new RAG pipeline instance with Ollama")
         default_rag_pipeline = RAGPipeline(
             embedding_model=embedding_model,
             collection_name=collection_name,
             persist_directory=persist_directory,
-            llm_model_path=llm_model_path
+            llm_model_name=llm_model_name,
+            ollama_api_url=ollama_api_url
         )
     
     return default_rag_pipeline

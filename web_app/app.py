@@ -13,9 +13,18 @@ import tempfile
 import threading
 import pyaudio
 import speech_recognition as sr
+import logging
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response
 from werkzeug.utils import secure_filename
 from datetime import datetime
+
+# Configure logging for optimal performance
+logging.basicConfig(
+    level=logging.WARNING,  # Reduced from INFO for speed
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Shorter format
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 # Import RAG system components
 from web_app.embeddings import get_embedding_generator
@@ -36,39 +45,6 @@ os.makedirs(AUDIO_FOLDER, exist_ok=True)
 UPLOAD_FOLDER = os.path.join(app.static_folder, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Start a background thread to pre-download speech models for all supported languages
-def preload_speech_models():
-    """Preload all speech recognition models in a background thread."""
-    print("Starting background thread to preload speech models...")
-    
-    def download_all_models():
-        try:
-            # Install Vosk if needed
-            install_vosk_if_needed()
-            
-            # Check if English model exists, download only if needed
-            print("Checking English speech model...")
-            en_model = download_model_if_needed('en')
-            print(f"English model status: {'Ready' if en_model else 'Failed to download'}")
-            
-            # Check if Spanish model exists, download only if needed
-            print("Checking Spanish speech model...")
-            es_model = download_model_if_needed('es')
-            print(f"Spanish model status: {'Ready' if es_model else 'Failed to download'}")
-            
-            # Print model locations for clarity
-            print("\nSPEECH MODELS IN USE:")
-            print(f"- English voice-to-text: {en_model}")
-            print(f"- Spanish voice-to-text: {es_model}")
-            print(f"- Text-to-speech: Windows SAPI5 voices via pyttsx3\n")
-        except Exception as e:
-            print(f"Error in preloading models: {str(e)}")
-    
-    # Start thread
-    download_thread = threading.Thread(target=download_all_models)
-    download_thread.daemon = True
-    download_thread.start()
-
 # Initialize TTS engine
 engine = None
 
@@ -79,26 +55,23 @@ recognizer = sr.Recognizer()
 rag_pipeline = None
 conversation_memory = ConversationMemory(max_history=5)
 
-def init_rag_components():
-    """Initialize RAG pipeline components in a background thread."""
-    global rag_pipeline
-    
-    try:
-        logger.info("Initializing RAG pipeline components")
-        # Initialize RAG pipeline with default settings
-        rag_pipeline = get_rag_pipeline()
-        logger.info("RAG pipeline initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize RAG components: {e}")
-        import traceback
-        traceback.print_exc()
-
 # Audio recording parameters
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000
 CHUNK = 4000
 RECORD_SECONDS = 5
+
+def init_rag_components():
+    """Initialize RAG pipeline components."""
+    global rag_pipeline
+    if rag_pipeline is None:
+        try:
+            rag_pipeline = get_rag_pipeline()
+            print("✅ RAG pipeline initialized")
+        except Exception as e:
+            print(f"❌ RAG pipeline initialization failed: {e}")
+            rag_pipeline = None
 
 def get_engine():
     """Get or initialize the TTS engine."""
@@ -1287,8 +1260,57 @@ def rag_to_speech():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # Start preloading speech models and RAG components at application startup
-preload_speech_models()
-threading.Thread(target=init_rag_components, daemon=True).start()
+# Make this safer by not running in parallel to avoid threading conflicts
+def safe_initialization():
+    """Safely initialize components sequentially to avoid memory conflicts."""
+    try:
+        # First, speech models (in main thread to avoid conflicts)
+        print("🎤 Checking speech models...")
+        install_vosk_if_needed()
+        en_model = download_model_if_needed('en')
+        es_model = download_model_if_needed('es')
+        print(f"Speech models: EN({'✅' if en_model else '❌'}) ES({'✅' if es_model else '❌'})")
+        
+        # Load embedding model NOW (not lazy) to avoid wait on first question
+        print("🧠 Loading embedding model (this takes ~30s)...")
+        try:
+            embedding_gen = get_embedding_generator()
+            # Force load the model by generating a test embedding
+            test_embedding = embedding_gen.generate_embeddings("test")
+            print("✅ Embedding model loaded and ready")
+        except Exception as embed_error:
+            print(f"❌ Embedding model error: {embed_error}")
+            print("   App will still work but embeddings will load on first use")
+        
+        # Check if Ollama is running before initializing RAG
+        print("🤖 Checking Ollama connection...")
+        import requests
+        try:
+            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            if response.status_code == 200:
+                print("✅ Ollama is running")
+                # Now initialize RAG pipeline
+                print("🔗 Initializing RAG pipeline...")
+                global rag_pipeline
+                rag_pipeline = get_rag_pipeline()
+                print("✅ RAG pipeline ready")
+            else:
+                print("❌ Ollama responded but not ready")
+                print("   Start Ollama with: ollama serve")
+        except requests.exceptions.ConnectionError:
+            print("❌ Ollama not running")
+            print("   Start Ollama with: ollama serve")
+            print("   App will work but RAG queries will fail")
+        except Exception as ollama_error:
+            print(f"❌ Ollama check failed: {ollama_error}")
+            print("   App will work but RAG queries will fail")
+        
+    except Exception as e:
+        print(f"⚠️ Initialization warning: {e}")
+        # Continue anyway - components will initialize on first use
+
+# Run safe initialization
+safe_initialization()
 
 def generate_self_signed_cert():
     """
@@ -1339,23 +1361,78 @@ def generate_self_signed_cert():
     return cert_file, key_file
 
 if __name__ == "__main__":
-    # Install required package for SSL certificates
+    import time
+    start_time = time.time()
+    
+    # Default to fast production mode (user can override with environment variables)
+    PRODUCTION_MODE = os.environ.get('AIEDU_PRODUCTION', 'true').lower() == 'true'
+    DEBUG_MODE = os.environ.get('AIEDU_DEBUG', 'false').lower() == 'true'
+    
+    # Apply speed optimizations by default
+    print("🚀 Starting AIEDU with speed optimizations...")
+    
+    # Memory safety and GPU optimizations (apply early to prevent conflicts)
+    os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:256'
+    os.environ['OMP_NUM_THREADS'] = '1'  # Prevent threading conflicts
+    os.environ['MKL_NUM_THREADS'] = '1'  # Intel MKL threading
+    
+    # Reduce logging noise for faster startup (always apply for speed)
+    logging.getLogger('sentence_transformers').setLevel(logging.ERROR)
+    logging.getLogger('chromadb').setLevel(logging.ERROR)
+    logging.getLogger('transformers').setLevel(logging.ERROR)
+    logging.getLogger('urllib3').setLevel(logging.ERROR)
+    logging.getLogger('torch').setLevel(logging.ERROR)
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
+    
+    # Install required package for SSL certificates (silent)
     try:
         import OpenSSL
     except ImportError:
-        print("Installing pyOpenSSL for HTTPS support...")
+        print("Installing pyOpenSSL...")
         import subprocess
         import sys
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyOpenSSL"])
-        print("pyOpenSSL installed successfully")
+        subprocess.run([sys.executable, "-m", "pip", "install", "pyOpenSSL"], 
+                      capture_output=True, check=True)
 
     # Generate SSL certificate for HTTPS
     try:
         cert_file, key_file = generate_self_signed_cert()
-        print("\nStarting server with HTTPS support for secure microphone access")
-        print("Note: Your browser will show a security warning because we're using a self-signed certificate.")
-        print("This is normal and you can safely proceed.\n")
-        app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=(cert_file, key_file))
+        
+        startup_time = time.time() - start_time
+        print(f"🌐 Server ready in {startup_time:.1f}s - https://127.0.0.1:5000")
+        print("💡 Models load on first use (lazy loading enabled)")
+        
+        if DEBUG_MODE:
+            print("🔧 Debug mode enabled")
+        
+        # Add memory cleanup before starting Flask
+        import gc
+        gc.collect()
+        
+        # Start with optimized settings (always fast)
+        app.run(
+            debug=DEBUG_MODE,                    # Debug off by default
+            host='0.0.0.0', 
+            port=5000, 
+            ssl_context=(cert_file, key_file),
+            threaded=True,                       # Better performance
+            use_reloader=False,                  # Disable reloader for speed
+            processes=1                          # Single process to avoid memory conflicts
+        )
+        
     except Exception as e:
-        print(f"Failed to setup HTTPS: {e}. Falling back to HTTP (microphone access may not work)")
-        app.run(debug=True, host='0.0.0.0', port=5000)
+        print(f"⚠️ HTTPS failed, using HTTP: {e}")
+        
+        # Add memory cleanup before starting Flask
+        import gc
+        gc.collect()
+        
+        app.run(
+            debug=DEBUG_MODE,
+            host='0.0.0.0', 
+            port=5000,
+            threaded=True,
+            use_reloader=False,                   # Always disable for speed
+            processes=1                          # Single process to avoid memory conflicts
+        )

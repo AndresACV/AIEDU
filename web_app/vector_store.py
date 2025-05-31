@@ -77,8 +77,8 @@ class VectorStore:
                 ids = [str(uuid4()) for _ in range(len(documents))]
             
             if metadatas is None:
-                # Create empty metadata if none provided
-                metadatas = [{} for _ in range(len(documents))]
+                # Create basic metadata if none provided (ChromaDB requires non-empty metadata)
+                metadatas = [{"source": "direct_input", "doc_type": "text"} for _ in range(len(documents))]
             
             # Add documents to collection
             self.collection.add(
@@ -172,9 +172,9 @@ class VectorStore:
             None
         """
         try:
-            # Create empty metadata if none provided
+            # Create basic metadata if none provided (ChromaDB requires non-empty metadata)
             if metadata is None:
-                metadata = {}
+                metadata = {"source": "direct_input", "doc_type": "text"}
                 
             # Update the document
             self.collection.update(
