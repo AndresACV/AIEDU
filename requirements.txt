@@ -1,26 +1,50 @@
-# Core dependencies
+# Core Web Framework
 flask>=2.0.1
-pyaudio>=0.2.11
-pyttsx3>=2.90
-SpeechRecognition>=3.8.1
-vosk>=0.3.45
 werkzeug>=2.0.1
 
-# Audio processing
-pydub>=0.25.1
-numpy>=1.20.0
-scipy>=1.7.0
-librosa>=0.8.1
-soundfile>=0.10.3
+# SSL/HTTPS Support
+pyOpenSSL>=23.0.0            # For SSL certificate generation (used in app.py)
+
+# Audio Processing (Speech-to-Text and Text-to-Speech)
+pyaudio>=0.2.11              # Audio input/output
+pyttsx3>=2.90                # Text-to-speech engine
+SpeechRecognition>=3.8.1     # Speech recognition
+vosk>=0.3.45                 # Offline speech recognition models
+pydub>=0.25.1                # Audio file manipulation and format conversion
+soundfile>=0.10.3            # Audio file I/O
+ffmpeg-python>=0.2.0         # FFmpeg Python bindings for audio conversion
 
 # RAG System Components
-sentence-transformers>=2.2.2  # For embedding generation
+sentence-transformers>=2.2.2 # For embedding generation
 chromadb>=0.4.6              # Vector database
-faiss-cpu>=1.7.4             # Alternative vector database (optional)
-llama-cpp-python>=0.1.77     # For local LLM inference with vicuna model
-langchain>=0.0.267           # For RAG pipeline components
+requests>=2.28.0             # For Ollama API calls and HTTP requests
 
-# Utils
-tqdm>=4.62.0
-matplotlib>=3.5.0
-pandas>=1.3.5
+# Machine Learning & GPU Support  
+torch>=2.0.0                 # PyTorch for ML models and CUDA support
+numpy>=1.20.0                # Required by sentence-transformers and audio processing
+
+# Essential Utils
+tqdm>=4.62.0                 # Progress bars
+typing-extensions>=4.0.0     # Enhanced type hints (used in several modules)
+pathlib>=1.0.0               # Path manipulation (though built-in in Python 3.4+)
+
+# System Integration
+psutil>=5.8.0                # System and process utilities (optional but recommended)
+
+# Development and Debugging (optional)
+# matplotlib>=3.5.0          # For plotting and visualization
+# pandas>=1.3.5              # For data analysis
+
+# SYSTEM DEPENDENCIES (must be installed separately):
+# 
+# For Ubuntu/Debian/WSL2:
+# sudo apt update
+# sudo apt install -y espeak espeak-data libespeak1 alsa-utils ffmpeg
+#
+# For Windows:
+# - FFmpeg: Download from https://ffmpeg.org/download.html
+# - TTS: Windows SAPI5 works automatically (no additional setup)
+#
+# Test TTS installation:
+# Linux/WSL2: espeak "Hello world"
+# Windows: TTS works automatically through pyttsx3
