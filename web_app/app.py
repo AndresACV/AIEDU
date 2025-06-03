@@ -683,14 +683,17 @@ def synthesize():
             
             # Generate speech with error handling
             try:
-                # For WSL/Linux, force espeak to output to file
+                # Detect environment and choose TTS engine
                 import platform
-                if platform.system() == 'Linux':
-                    print("Using direct espeak file output for WSL")
-                    import subprocess
+                import subprocess
+                
+                system_info = platform.uname()
+                
+                if platform.system() == 'Linux' and 'microsoft' in system_info.release.lower():
+                    print("Using Windows TTS from WSL")
                     
-                    # Determine espeak voice based on selected voice_id
-                    espeak_voice = 'es-la'  # Default to Spanish Latin America
+                    # Determine Windows voice based on selected voice_id
+                    windows_voice = 'Microsoft Sabina Desktop'  # Default to Spanish voice
                     
                     if voice_id and voices:
                         for voice in voices:
@@ -698,36 +701,60 @@ def synthesize():
                                 voice_name = voice.name.lower() if hasattr(voice, 'name') else ''
                                 print(f"Selected voice: {voice.name}")
                                 
-                                # Map to better espeak voices
-                                if 'spanish' in voice_name or 'español' in voice_name:
-                                    espeak_voice = 'es-la'  # Spanish Latin America (better quality)
-                                    print("Using Spanish Latin America espeak voice")
-                                elif 'english' in voice_name:
-                                    espeak_voice = 'en+f3'  # English female variant 3 (softer)
-                                    print("Using English espeak voice")
+                                # Map to Windows voices
+                                if 'english' in voice_name:
+                                    windows_voice = 'Microsoft Zira Desktop'  # English US female
+                                    print("Using Windows English voice")
+                                elif 'spanish' in voice_name or 'español' in voice_name:
+                                    windows_voice = 'Microsoft Sabina Desktop'  # Spanish female
+                                    print("Using Windows Spanish voice")
                                 break
                     
-                    # Clean espeak parameters for natural speech
+                    # Convert WSL path to Windows path for PowerShell
+                    windows_path = output_path.replace('/mnt/', '').replace('/', '\\')
+                    if windows_path.startswith('d\\'):
+                        windows_path = 'D:\\' + windows_path[2:]
+                    
+                    # Use Windows TTS via PowerShell to generate WAV file
+                    ps_script = f'''
+Add-Type -AssemblyName System.Speech
+$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$synth.SelectVoice("{windows_voice}")
+$synth.Rate = 0
+$synth.SetOutputToWaveFile("{windows_path}")
+$synth.Speak("{text.replace('"', '`"')}")
+$synth.Dispose()
+'''
+                    
+                    try:
+                        result = subprocess.run([
+                            'powershell.exe', '-Command', ps_script
+                        ], capture_output=True, text=True, timeout=30)
+                        
+                        if result.returncode == 0:
+                            print("Windows TTS generation successful")
+                        else:
+                            print(f"Windows TTS error: {result.stderr}")
+                            raise Exception(f"Windows TTS failed: {result.stderr}")
+                    except subprocess.TimeoutExpired:
+                        raise Exception("Windows TTS timed out")
+                        
+                elif platform.system() == 'Linux':
+                    print("Using espeak-ng for pure Linux")
+                    
+                    # Use espeak-ng (better than espeak) for pure Linux
                     cmd = [
-                        'espeak',
-                        '-v', espeak_voice,      # Voice/language
-                        '-w', output_path,       # Write to WAV file
-                        '-s', '175',             # Fixed speed for consistency
-                        '-a', '120',             # Fixed amplitude
-                        '-p', '48',              # Fixed pitch
-                        '-g', '2',               # Small gaps between words
-                        '-z',                    # No final sentence pause
+                        'espeak-ng',
+                        '-v', 'es-la' if 'spanish' in (voice_id or '').lower() else 'en-us',
+                        '-w', output_path,
+                        '-s', '150',  # Natural speed
                         text
                     ]
                     
-                    print(f"espeak command: {' '.join(cmd[:8])} [text]")
                     result = subprocess.run(cmd, capture_output=True, text=True)
-                    
-                    if result.returncode == 0:
-                        print("Direct espeak generation successful")
-                    else:
-                        print(f"espeak error: {result.stderr}")
-                        raise Exception(f"espeak failed: {result.stderr}")
+                    if result.returncode != 0:
+                        raise Exception(f"espeak-ng failed: {result.stderr}")
+                        
                 else:
                     # Use pyttsx3 for Windows
                     e.save_to_file(text, output_path)
@@ -1272,16 +1299,19 @@ def rag_to_speech():
             print(f"Generating RAG speech file: {audio_path}")
             print(f"Text to speak ({len(answer_text)} chars): '{answer_text[:100]}{'...' if len(answer_text) > 100 else ''}'")
             
-            # Generate speech file with error handling
+            # Generate speech file with error handling using same logic as /synthesize
             try:
-                # For WSL/Linux, use direct espeak
+                # Detect environment and choose TTS engine (same as /synthesize endpoint)
                 import platform
-                if platform.system() == 'Linux':
-                    print("Using direct espeak for RAG response")
-                    import subprocess
+                import subprocess
+                
+                system_info = platform.uname()
+                
+                if platform.system() == 'Linux' and 'microsoft' in system_info.release.lower():
+                    print("Using Windows TTS from WSL for RAG response")
                     
-                    # Determine espeak voice for RAG
-                    espeak_voice = 'es-la'  # Default to Spanish Latin America for RAG
+                    # Determine Windows voice based on selected voice_id (same mapping as /synthesize)
+                    windows_voice = 'Microsoft Sabina Desktop'  # Default to Spanish voice
                     
                     if voice_id and voices:
                         for voice in voices:
@@ -1289,35 +1319,62 @@ def rag_to_speech():
                                 voice_name = voice.name.lower() if hasattr(voice, 'name') else ''
                                 print(f"RAG using voice: {voice.name}")
                                 
+                                # Map to Windows voices (same as /synthesize)
                                 if 'english' in voice_name:
-                                    espeak_voice = 'en+f3'
+                                    windows_voice = 'Microsoft Zira Desktop'  # English US female
+                                    print("Using Windows English voice for RAG")
                                 elif 'spanish' in voice_name or 'español' in voice_name:
-                                    espeak_voice = 'es-la'
+                                    windows_voice = 'Microsoft Sabina Desktop'  # Spanish female
+                                    print("Using Windows Spanish voice for RAG")
                                 break
                     
-                    # Clean espeak for RAG responses
+                    # Convert WSL path to Windows path for PowerShell (same as /synthesize)
+                    windows_path = audio_path.replace('/mnt/', '').replace('/', '\\')
+                    if windows_path.startswith('d\\'):
+                        windows_path = 'D:\\' + windows_path[2:]
+                    
+                    # Use Windows TTS via PowerShell to generate WAV file (same as /synthesize)
+                    ps_script = f'''
+Add-Type -AssemblyName System.Speech
+$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$synth.SelectVoice("{windows_voice}")
+$synth.Rate = 0
+$synth.SetOutputToWaveFile("{windows_path}")
+$synth.Speak("{answer_text.replace('"', '`"')}")
+$synth.Dispose()
+'''
+                    
+                    try:
+                        result = subprocess.run([
+                            'powershell.exe', '-Command', ps_script
+                        ], capture_output=True, text=True, timeout=30)
+                        
+                        if result.returncode == 0:
+                            print("Windows TTS RAG generation successful")
+                        else:
+                            print(f"Windows TTS RAG error: {result.stderr}")
+                            raise Exception(f"Windows TTS failed: {result.stderr}")
+                    except subprocess.TimeoutExpired:
+                        raise Exception("Windows TTS RAG timed out")
+                        
+                elif platform.system() == 'Linux':
+                    print("Using espeak-ng for pure Linux RAG response")
+                    
+                    # Use espeak-ng (better than espeak) for pure Linux (same as /synthesize)
                     cmd = [
-                        'espeak',
-                        '-v', espeak_voice,      # Voice/language  
-                        '-w', audio_path,        # Write to WAV file
-                        '-s', '170',             # Slightly slower for longer responses
-                        '-a', '120',             # Fixed amplitude
-                        '-p', '48',              # Fixed pitch
-                        '-g', '2',               # Small gaps for flow
-                        '-z',                    # No final pause
+                        'espeak-ng',
+                        '-v', 'es-la' if 'spanish' in (voice_id or '').lower() else 'en-us',
+                        '-w', audio_path,
+                        '-s', '150',  # Natural speed
                         answer_text
                     ]
                     
-                    print(f"RAG espeak: {espeak_voice} voice")
                     result = subprocess.run(cmd, capture_output=True, text=True)
-                    
-                    if result.returncode == 0:
-                        print("Direct espeak RAG generation successful")
-                    else:
-                        print(f"RAG espeak error: {result.stderr}")
-                        raise Exception(f"espeak failed: {result.stderr}")
+                    if result.returncode != 0:
+                        raise Exception(f"espeak-ng failed: {result.stderr}")
+                        
                 else:
-                    # Use pyttsx3 for Windows
+                    # Use pyttsx3 for Windows (same as /synthesize)
                     engine.save_to_file(answer_text, audio_path)
                     print("RAG save_to_file completed")
                     engine.runAndWait()

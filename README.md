@@ -189,7 +189,8 @@ AIEDU/
 #### **Speech Processing** 
 - **STT**: Vosk models (100% offline, Kaldi-based)
 - **TTS**: Multi-platform text-to-speech
-  - **Linux/WSL2**: espeak (Spanish Latin America, English variants)
+  - **WSL2**: Windows TTS via PowerShell (high-quality native voices)
+  - **Pure Linux**: espeak-ng (optimized for Spanish Latin America, English)
   - **Windows**: SAPI5 (native Windows voices)
 - **Voice Selection**: Simplified to English (US) and Spanish (Latin America)
 - **Audio**: FFmpeg conversion, Web Audio API, WAV output
@@ -247,9 +248,9 @@ export AIEDU_DEBUG=false        # Default: false (production)
 ### ✅ Production Ready Features
 - **Core RAG Pipeline**: 100% functional with optimized performance
 - **Speech Interaction**: Full bidirectional voice processing
-  - **TTS Fixed**: WSL2 compatibility achieved with direct espeak integration
+  - **TTS Upgraded**: WSL2 now uses Windows TTS for premium voice quality
   - **Voice Selection**: Simplified to 2 high-quality voices (EN-US, ES-LA)
-  - **Audio Quality**: Optimized espeak parameters for natural speech
+  - **Audio Quality**: Native Windows voices via PowerShell integration
 - **Knowledge Management**: Complete CRUD operations
 - **Web Interface**: Production-stable with HTTPS
 - **Error Handling**: Graceful failures with clear messaging
@@ -279,17 +280,24 @@ ollama pull mistral:7b  # If missing
 - Verify internet connection for initial setup
 - Check `web_app/models/` directory
 
-**TTS Not Working (Linux/WSL2)**:
-```bash
-# Install espeak if missing
-sudo apt update
-sudo apt install -y espeak espeak-data libespeak1
+**TTS Not Working**:
 
-# Test espeak
-espeak "Hello world"
+*For WSL2:*
+- Windows TTS is accessed automatically via PowerShell
+- No additional installation needed
+- Premium Spanish and English voices included
+
+*For Pure Linux:*
+```bash
+# Install espeak-ng if missing
+sudo apt update
+sudo apt install -y espeak-ng
+
+# Test espeak-ng
+espeak-ng "Hello world"
 
 # Check available voices
-espeak --voices
+espeak-ng --voices
 ```
 
 ## 📦 Dependencies
