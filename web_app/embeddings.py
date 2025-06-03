@@ -158,7 +158,4 @@ def get_embedding_generator(model_name: str = 'sentence-transformers/all-MiniLM-
     
     return _lazy_embedding_generator
 
-# Backward compatibility function
-def get_lazy_embedding_generator(model_name: str = 'sentence-transformers/all-MiniLM-L6-v2'):
-    """Alias for get_embedding_generator for clarity."""
-    return get_embedding_generator(model_name) 
+ 

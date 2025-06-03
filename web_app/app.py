@@ -132,126 +132,51 @@ def get_engine():
 
 
 def convert_webm_to_wav(webm_path):
-    """Convert WebM to WAV using the audio data from SpeechRecognition."""
+    """Convert WebM to WAV using ffmpeg - simplified and reliable."""
+    import subprocess
+    import os
+    
+    # Verify the input file exists and has content
+    if not os.path.exists(webm_path):
+        print(f"ERROR: Input WebM file does not exist: {webm_path}")
+        return None
+        
+    file_size = os.path.getsize(webm_path)
+    if file_size == 0:
+        print(f"ERROR: Input WebM file is empty: {webm_path}")
+        return None
+    
+    print(f"Converting WebM to WAV: {webm_path} (size: {file_size} bytes)")
+    wav_path = webm_path.replace('.webm', '.wav')
+    
     try:
-        import subprocess
-        import sys
-        import os
-        import wave
-        import numpy as np
-        from pathlib import Path
+        # Use ffmpeg for reliable conversion
+        cmd = [
+            "ffmpeg", "-y",  # -y to overwrite output file
+            "-i", webm_path,
+            "-acodec", "pcm_s16le",  # 16-bit PCM
+            "-ar", "16000",          # 16kHz sample rate
+            "-ac", "1",              # Mono
+            wav_path
+        ]
         
-        # Verify the input file exists and has content
-        if not os.path.exists(webm_path):
-            print(f"ERROR: Input WebM file does not exist: {webm_path}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0 and os.path.exists(wav_path) and os.path.getsize(wav_path) > 100:
+            print(f"FFmpeg conversion successful: {wav_path} ({os.path.getsize(wav_path)} bytes)")
+            return wav_path
+        else:
+            print(f"FFmpeg conversion failed: {result.stderr}")
             return None
             
-        file_size = os.path.getsize(webm_path)
-        if file_size == 0:
-            print(f"ERROR: Input WebM file is empty: {webm_path}")
-            return None
-            
-        print(f"Processing WebM file: {webm_path} (size: {file_size} bytes)")
-        
-        wav_path = webm_path.replace('.webm', '.wav')
-        
-        # First, attempt to decode the audio using SpeechRecognition
-        try:
-            print("Attempting to use SpeechRecognition for WebM decoding")
-            import speech_recognition as sr
-            recognizer = sr.Recognizer()
-            
-            try:
-                # Try using AudioFile directly first - sometimes it works with webm
-                with sr.AudioFile(webm_path) as source:
-                    audio_data = recognizer.record(source)
-                    
-                print(f"Success reading WebM directly with SpeechRecognition, writing to WAV")
-                with open(wav_path, 'wb') as wav_file:
-                    wav_file.write(audio_data.get_wav_data())
-                    
-                if os.path.exists(wav_path) and os.path.getsize(wav_path) > 0:
-                    print(f"SpeechRecognition direct conversion successful with size {os.path.getsize(wav_path)} bytes")
-                    return wav_path
-            except Exception as direct_error:
-                print(f"Direct reading failed: {direct_error}, trying fallback method")
-                
-                # Raw conversion approach as fallback
-                with open(webm_path, 'rb') as source_file:
-                    audio_binary = source_file.read()
-                    
-                # Try to create a WAV file directly
-                with open(wav_path, 'wb') as wav_file:
-                    # First, try to use the SR conversion function
-                    try:
-                        # We need to create a fake AudioData object since we don't know sample rate yet
-                        # 16000 Hz, 16-bit mono are standard parameters for speech recognition
-                        temp_audio_data = sr.AudioData(audio_binary, 16000, 2)
-                        wav_file.write(temp_audio_data.get_wav_data())
-                        print(f"SpeechRecognition AudioData conversion succeeded, created {wav_path}")
-                    except Exception as conversion_error:
-                        print(f"SR AudioData conversion failed: {conversion_error}")
-                        return None
-                        
-                if os.path.exists(wav_path) and os.path.getsize(wav_path) > 0:
-                    print(f"Created WAV file with size {os.path.getsize(wav_path)} bytes")
-                    return wav_path
-        except Exception as sr_error:
-            print(f"SpeechRecognition method failed: {sr_error}")
-        
-        # Install pydub if needed and try that route
-        try:
-            try:
-                from pydub import AudioSegment
-            except ImportError:
-                print("Installing pydub package")
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "pydub"])
-                from pydub import AudioSegment
-                
-            # Try to install ffmpeg for Windows if not available
-            try:
-                print("Installing ffmpeg-python package (if not already installed)")
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "ffmpeg-python"])
-            except Exception as ffmpeg_install_error:
-                print(f"Note: ffmpeg-python installation failed: {ffmpeg_install_error}")
-                
-            # Try pydub conversion
-            try:
-                audio = AudioSegment.from_file(webm_path, format="webm")
-                audio = audio.set_channels(1)  # Mono
-                audio = audio.set_frame_rate(16000)  # 16kHz
-                audio = audio.set_sample_width(2)  # 16-bit
-                
-                # Export as WAV with explicit parameters
-                print(f"Exporting to WAV format with pydub: {wav_path}")
-                audio.export(wav_path, format="wav", parameters=["-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1"])
-                
-                if os.path.exists(wav_path) and os.path.getsize(wav_path) > 0:
-                    print(f"Pydub conversion successful. Created {wav_path} with size {os.path.getsize(wav_path)} bytes")
-                    return wav_path
-            except Exception as pydub_error:
-                print(f"Pydub processing error: {pydub_error}")
-        except Exception as pydub_install_error:
-            print(f"Pydub route failed: {pydub_install_error}")
-        
-        # Direct ffmpeg approach as a last resort
-        try:
-            print("Attempting direct ffmpeg command")
-            result = subprocess.run(["ffmpeg", "-i", webm_path, "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", wav_path], 
-                       check=True, capture_output=True)
-            if os.path.exists(wav_path) and os.path.getsize(wav_path) > 0:
-                print(f"Direct FFmpeg conversion successful. Created {wav_path}")
-                return wav_path
-        except Exception as direct_ffmpeg_error:
-            print(f"Direct FFmpeg conversion failed: {direct_ffmpeg_error}")
-        
-        # If all conversion methods fail
-        print("All conversion methods failed. Cannot process audio.")
+    except subprocess.TimeoutExpired:
+        print("FFmpeg conversion timed out")
+        return None
+    except FileNotFoundError:
+        print("FFmpeg not found. Please install ffmpeg.")
         return None
     except Exception as e:
-        print(f"Error converting WebM to WAV: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error during WebM conversion: {e}")
         return None
 
 def install_vosk_if_needed():
@@ -270,79 +195,35 @@ def install_vosk_if_needed():
             print(f"Failed to install vosk: {e}")
             return False
 
-def download_model_if_needed(language='en'):
-    """Download Vosk model for the specified language if not already available."""
-    import os
+def get_model_path(language='en'):
+    """Get the path to the local Vosk model. Models must be pre-installed."""
     from pathlib import Path
-    import zipfile
-    import requests
     
-    # Create models directory if it doesn't exist
     models_dir = Path("web_app/models")
-    models_dir.mkdir(exist_ok=True)
     
-    # Define model names and URLs
+    # Define model names based on what's expected to be pre-installed
     if language == 'en':
         model_name = "vosk-model-small-en-us-0.15"
-        model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
     elif language == 'es':
-        # Using the full Spanish model for better recognition
         model_name = "vosk-model-small-es-0.42"
-        model_url = "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip"
     else:
-        # Default to English
-        model_name = "vosk-model-small-en-us-0.15"
-        model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+        model_name = "vosk-model-small-en-us-0.15"  # Default to English
     
     model_path = models_dir / model_name
     
-    print(f"Checking for Vosk model for language: {language}")
-    
-    # model_name and model_url are already set above based on language
-    print(f"Using model name: {model_name}")
-    print(f"Using model URL: {model_url}")
-    
-    # Check if model already exists - NEVER force redownload
-    if model_path.exists():
-        print(f"Model {model_name} already exists at {model_path}")
+    # Check if model exists locally
+    if model_path.exists() and model_path.is_dir():
+        print(f"✅ Using local model: {model_name}")
         return str(model_path)
     
-    # Download and extract model
-    zip_path = models_dir / f"{model_name}.zip"
-    print(f"Downloading model {model_name} from {model_url}...")
-    
-    try:
-        # Download with progress reporting
-        response = requests.get(model_url, stream=True)
-        total_size = int(response.headers.get('content-length', 0))
-        block_size = 1024
-        wrote = 0
-        
-        with open(zip_path, 'wb') as f:
-            for data in response.iter_content(block_size):
-                wrote = wrote + len(data)
-                f.write(data)
-                print(f"Downloaded {wrote} of {total_size} bytes", end='\r')
-        
-        print(f"\nExtracting model to {model_path}...")
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Get the name of the folder inside the zip
-            extracted_dir = zipfile.Path(zip_ref, zip_ref.namelist()[0].split('/')[0])
-            # Extract to models directory
-            zip_ref.extractall(models_dir)
-        
-        # Rename extracted directory to our standard name
-        extracted_path = next(models_dir.glob("vosk-model-*"))
-        extracted_path.rename(model_path)
-        
-        # Remove zip file
-        zip_path.unlink()
-        
-        print(f"Model {model_name} ready")
-        return str(model_path)
-    except Exception as e:
-        print(f"Error downloading model: {e}")
-        return None
+    # Model not found - this is a configuration error
+    print(f"❌ Model {model_name} not found at {model_path}")
+    print(f"📋 Please ensure speech recognition models are installed in {models_dir}")
+    print("   Required models:")
+    print("   - vosk-model-small-en-us-0.15/ (English)")
+    print("   - vosk-model-small-es-0.42/ (Spanish)")
+    print("   See README.md for model installation instructions")
+    return None
 
 def transcribe_audio_file(file_path, language='en-US'):
     """Transcribe audio using Vosk for 100% offline speech recognition."""
@@ -355,88 +236,28 @@ def transcribe_audio_file(file_path, language='en-US'):
     import wave
     import numpy as np
     
-    print(f"Attempting to transcribe file: {file_path}")
-    print(f"Using language: {language}")
+    print(f"Transcribing {file_path} in {language}")
     
-    # Strict language detection
-    # This is critical for proper model selection
+    # Language detection
     if language == 'es-ES':
         lang_code = 'es'
-        print("============================================")
-        print("SPANISH LANGUAGE SELECTED")
-        print("============================================")
     else:
         lang_code = 'en'
-        print("============================================")
-        print("ENGLISH LANGUAGE SELECTED")
-        print("============================================")
     
-    print(f"Selected language code: {lang_code}")
+    print(f"Using {lang_code.upper()} recognition")
     
-    # Keep the original file for debugging
-    original_file = file_path
-    original_dir = os.path.dirname(file_path)
-    temp_dir = os.path.join(original_dir, "temp")
-    os.makedirs(temp_dir, exist_ok=True)
+
     
-    # If file is WebM format, try to convert it to WAV using ffmpeg directly
+    # If file is WebM format, convert it to WAV
     if file_path.lower().endswith('.webm'):
-        print("Converting WebM to WAV format using multiple methods")
-        
-        # Method 1: Try using ffmpeg directly (most reliable)
-        wav_file = os.path.join(temp_dir, os.path.basename(file_path).replace('.webm', '.wav'))
-        try:
-            print(f"ATTEMPT 1: Direct ffmpeg conversion: {file_path} -> {wav_file}")
-            # First try to use ffmpeg directly
-            try:
-                cmd = ["ffmpeg", "-y", "-i", file_path, "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", wav_file]
-                print(f"Running command: {' '.join(cmd)}")
-                result = subprocess.run(cmd, check=True, capture_output=True)
-                stdout = result.stdout.decode() if result.stdout else ''
-                stderr = result.stderr.decode() if result.stderr else ''
-                print(f"FFmpeg output: {stderr}")
-                
-                if os.path.exists(wav_file) and os.path.getsize(wav_file) > 100:
-                    print(f"FFmpeg direct conversion successful: {wav_file} ({os.path.getsize(wav_file)} bytes)")
-                    file_path = wav_file
-                    print(f"Using converted WAV file: {file_path}")
-                else:
-                    print("FFmpeg conversion failed or produced invalid output")
-                    raise Exception("Invalid FFmpeg output")
-            except Exception as ffmpeg_error:
-                print(f"Direct FFmpeg conversion failed: {ffmpeg_error}, trying fallback")
-                
-                # Method 2: Try using pydub if available
-                try:
-                    from pydub import AudioSegment
-                    print("ATTEMPT 2: Using pydub for conversion")
-                    audio = AudioSegment.from_file(file_path)
-                    audio = audio.set_channels(1).set_frame_rate(16000).set_sample_width(2)
-                    audio.export(wav_file, format="wav")
-                    
-                    if os.path.exists(wav_file) and os.path.getsize(wav_file) > 100:
-                        print(f"Pydub conversion successful: {wav_file} ({os.path.getsize(wav_file)} bytes)")
-                        file_path = wav_file
-                    else:
-                        raise Exception("Invalid pydub output")
-                except Exception as pydub_error:
-                    print(f"Pydub conversion failed: {pydub_error}, trying another fallback")
-                    
-                    # Method 3: Use our original complex conversion function
-                    wav_file = convert_webm_to_wav(file_path)
-                    if wav_file:
-                        file_path = wav_file
-                        print(f"Fallback conversion successful: {file_path}")
-                    else:
-                        return {
-                            'success': False,
-                            'error': "Could not convert audio format to WAV after multiple attempts"
-                        }
-        except Exception as conversion_error:
-            print(f"All conversion methods failed: {conversion_error}")
+        wav_file = convert_webm_to_wav(file_path)
+        if wav_file:
+            file_path = wav_file
+            print(f"Using converted WAV file: {file_path}")
+        else:
             return {
                 'success': False,
-                'error': "Could not convert audio format to WAV"
+                'error': "Could not convert WebM audio format to WAV"
             }
     
     # Check if the file exists
@@ -459,8 +280,8 @@ def transcribe_audio_file(file_path, language='en-US'):
         import wave
         import subprocess
         
-        # Download model if needed
-        model_path = download_model_if_needed(lang_code)
+        # Get model path (must be pre-installed)
+        model_path = get_model_path(lang_code)
         if not model_path:
             return {
                 'success': False,
@@ -469,37 +290,16 @@ def transcribe_audio_file(file_path, language='en-US'):
         
         print(f"Using Vosk model at: {model_path}")
         
-        # For Spanish recognition
-        if lang_code == 'es':
-            print("*** USING SPANISH RECOGNITION WORKFLOW ***")
-            
-            # Use the existing Spanish model without forcing redownload
-            # This avoids unnecessary downloads and speeds up startup
-            print("Using existing Spanish model if available...")
-            model_path = download_model_if_needed('es')  # Will NOT force redownload
-            if not model_path or not os.path.exists(model_path):
-                return {
-                    'success': False,
-                    'error': "Could not find or download Spanish speech recognition model"
-                }
-                
-            print(f"Using Spanish Vosk model at: {model_path}")
-            
-            # Load the Spanish model with simple configuration
-            try:
-                model = vosk.Model(model_path)
-                print("Spanish model loaded successfully")
-            except Exception as model_error:
-                print(f"Error loading Spanish model: {model_error}")
-                return {
-                    'success': False,
-                    'error': f"Could not load Spanish speech model: {str(model_error)}"
-                }
-        else:
-            # Standard English model loading
-            print(f"Using English Vosk model at: {model_path}")
+        # Load the model (works for both English and Spanish)
+        try:
             model = vosk.Model(model_path)
-            print("English model loaded successfully")
+            print(f"{lang_code.upper()} model loaded successfully")
+        except Exception as model_error:
+            print(f"Error loading {lang_code} model: {model_error}")
+            return {
+                'success': False,
+                'error': f"Could not load {lang_code} speech model: {str(model_error)}"
+            }
         
         try:
             wf = wave.open(file_path, "rb")
@@ -602,15 +402,7 @@ def transcribe_audio_file(file_path, language='en-US'):
         # Get the text from the result JSON
         result_text = result_json.get("text", "")
         
-        # Record language used for debugging
-        print(f"Vosk recognition result ({lang_code}): '{result_text}'")
-        print(f"Full recognition result: {result_json}")
-        
-        # Verify the transcription made sense for the language
-        if lang_code == 'es' and not result_text:
-            print("WARNING: Empty result from Spanish model - this likely indicates a model loading issue.")
-        elif lang_code == 'es':
-            print("Spanish transcription completed. If you see English-like words, there might be an issue with language detection.")
+        print(f"Recognition result: '{result_text}'")
         
         # Check language-specific handling of results
         if lang_code == 'es':
@@ -669,7 +461,7 @@ def transcribe_audio_file(file_path, language='en-US'):
         }
 
 
-# Removed API-based direct_streaming_recognition function
+
 
 def get_available_voices():
     """Get available TTS voices - one English (US) and one Spanish (Latin America) only."""
@@ -1630,10 +1422,10 @@ def safe_initialization():
     """Safely initialize components sequentially to avoid memory conflicts."""
     try:
         # First, speech models (in main thread to avoid conflicts)
-        print("🎤 Checking speech models...")
+        print("🎤 Verifying pre-installed speech models...")
         install_vosk_if_needed()
-        en_model = download_model_if_needed('en')
-        es_model = download_model_if_needed('es')
+        en_model = get_model_path('en')
+        es_model = get_model_path('es')
         print(f"Speech models: EN({'✅' if en_model else '❌'}) ES({'✅' if es_model else '❌'})")
         
         # Load embedding model NOW (not lazy) to avoid wait on first question
@@ -1647,6 +1439,18 @@ def safe_initialization():
             print(f"❌ Embedding model error: {embed_error}")
             print("   App will still work but embeddings will load on first use")
         
+        # Warm up TTS engine to avoid first-call delay
+        print("🎤 Warming up TTS engine...")
+        try:
+            tts_engine = get_engine()
+            if tts_engine:
+                print("✅ TTS engine ready")
+            else:
+                print("⚠️ TTS engine initialization deferred")
+        except Exception as tts_error:
+            print(f"⚠️ TTS warmup failed: {tts_error}")
+            print("   First TTS request may have slight delay")
+        
         # Check if Ollama is running before initializing RAG
         print("🤖 Checking Ollama connection...")
         import requests
@@ -1659,6 +1463,18 @@ def safe_initialization():
                 global rag_pipeline
                 rag_pipeline = get_rag_pipeline()
                 print("✅ RAG pipeline ready")
+                
+                # Warm up the LLM with a test query to avoid first-call delay
+                print("🔥 Warming up LLM model...")
+                try:
+                    test_response = rag_pipeline.llm.generate_response("Hello", max_tokens=10)
+                    if test_response and not rag_pipeline.llm.is_mock_mode:
+                        print("✅ LLM model warmed up successfully")
+                    else:
+                        print("⚠️ LLM in mock mode - queries will use fallback responses")
+                except Exception as warmup_error:
+                    print(f"⚠️ LLM warmup failed: {warmup_error}")
+                    print("   First query may have slight delay")
             else:
                 print("❌ Ollama responded but not ready")
                 print("   Start Ollama with: ollama serve")
@@ -1766,7 +1582,7 @@ if __name__ == "__main__":
         
         startup_time = time.time() - start_time
         print(f"🌐 Server ready in {startup_time:.1f}s - https://127.0.0.1:5000")
-        print("💡 Models load on first use (lazy loading enabled)")
+        print("💡 Models pre-loaded for instant responses")
         
         if DEBUG_MODE:
             print("🔧 Debug mode enabled")

@@ -252,5 +252,4 @@ def get_llm(model_name: str = "mistral:7b", api_url: str = "http://localhost:114
     """
     return OllamaLLMInference(model_name=model_name, api_url=api_url)
 
-# Maintain backward compatibility
-LLMInference = OllamaLLMInference
+

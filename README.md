@@ -1,4 +1,4 @@
-# 🧠 AIEDU: Production-Ready RAG System with Speech Interaction
+# 🧠 AIEDU: RAG System with Speech Interaction
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
 ![Flask](https://img.shields.io/badge/Flask-Production-green)
@@ -10,7 +10,7 @@
   <img src="assets/logo.jpg" alt="AIEDU Logo" width="400">
 </p>
 
-A **production-ready** Retrieval-Augmented Generation (RAG) system with comprehensive speech interaction capabilities. This educational AI platform combines high-quality embeddings, 100% offline speech processing, and local LLM inference through an intuitive web interface.
+A Retrieval-Augmented Generation (RAG) system with comprehensive speech interaction capabilities. This educational AI platform combines high-quality embeddings, 100% offline speech processing, and local LLM inference through an intuitive web interface.
 
 ## ✨ Key Features
 
@@ -44,9 +44,9 @@ AIEDU/
 │   ├── vector_store.py         # ChromaDB vector database  
 │   ├── llm.py                  # Ollama API integration
 │   ├── rag_pipeline.py         # Complete RAG implementation
-│   ├── models/                 # Local speech models (auto-downloaded)
-│   │   ├── vosk-model-small-en-us-0.15/  # English Vosk model
-│   │   └── vosk-model-small-es-0.42/     # Spanish Vosk model
+│   ├── models/                 # Pre-installed speech models (required)
+│   │   ├── vosk-model-small-en-us-0.15/  # English Vosk model (~40MB)
+│   │   └── vosk-model-small-es-0.42/     # Spanish Vosk model (~40MB)
 │   ├── static/                 # Web assets and generated audio
 │   ├── ssl/                    # HTTPS certificates
 │   └── templates/
@@ -112,6 +112,29 @@ AIEDU/
    
    # Install dependencies
    pip install -r requirements.txt
+   ```
+
+5. **Install Speech Recognition Models**:
+   ```bash
+   # The application requires pre-installed Vosk models in web_app/models/
+   # These models are already included in the repository:
+   
+   # Required models:
+   # - web_app/models/vosk-model-small-en-us-0.15/  (English)
+   # - web_app/models/vosk-model-small-es-0.42/     (Spanish)
+   
+   # Verify models are present:
+   ls -la web_app/models/
+   # Should show both model directories
+   
+   # If models are missing, download them manually:
+   # English model (~40MB):
+   # wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+   # unzip vosk-model-small-en-us-0.15.zip -d web_app/models/
+   
+   # Spanish model (~40MB):
+   # wget https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+   # unzip vosk-model-small-es-0.42.zip -d web_app/models/
    ```
 
 ### Launch Application
@@ -232,19 +255,6 @@ export AIEDU_DEBUG=false        # Default: false (production)
 - **Error Handling**: Graceful failures with clear messaging
 - **Memory Management**: Crash-free operation with safety measures
 
-### 🎯 Optional Enhancements
-- **Auto-start Ollama**: Single command startup (feasible)
-- **Docker Deployment**: Containerized deployment option
-- **Advanced RAG**: Multi-modal documents, custom embeddings
-
-## 📈 Optimization History
-
-**Major Performance Sprint (January 2025)**:
-- ✅ Startup: 5+ minutes → 45 seconds (87% improvement)
-- ✅ First Question: 2+ minutes → instant (100% improvement)  
-- ✅ Memory Stability: Crash-prone → production-stable
-- ✅ API Reliability: 2-min hangs → 30s graceful timeout
-
 ## 🔧 Troubleshooting
 
 ### Common Issues
@@ -282,11 +292,6 @@ espeak "Hello world"
 espeak --voices
 ```
 
-**TTS Quality Issues**:
-- Default voices: Spanish (Latin America) and English (US)
-- WSL2 uses optimized espeak parameters for natural speech
-- Windows uses native SAPI5 voices automatically
-
 ## 📦 Dependencies
 
 **Core Requirements**:
@@ -310,10 +315,5 @@ MIT License - See LICENSE file for details.
 ## 👥 Contributors
 
 **Andres Calvo** - [AndresACV](https://github.com/AndresACV)
-- System architecture and RAG implementation
-- Performance optimization and production readiness
-- Speech integration and web interface
 
 ---
-
-**🎓 Educational Focus**: This system is designed for AI education, demonstrating production-ready RAG architecture, local LLM inference, and multi-modal interaction patterns.
