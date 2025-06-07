@@ -179,6 +179,7 @@ cython_debug/
 # Generated audio files
 web_app/static/audio/
 web_app/static/uploads/
+audio_files/
 
 # Speech recognition models (large files)
 web_app/models/

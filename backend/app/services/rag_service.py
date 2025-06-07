@@ -45,7 +45,7 @@ class RAGService:
     Features:
     - Document upload and processing with embeddings
     - Vector-based document retrieval  
-    - LLM-powered response generation via Ollama
+    - Hybrid LLM-powered response generation (Local Ollama + Cloud Gemini)
     - Knowledge base management with CRUD operations
     - Performance tracking and statistics
     """
@@ -55,7 +55,8 @@ class RAGService:
                  collection_name: str = "rag_documents",
                  persist_directory: str = None,
                  llm_model_name: str = "mistral:7b",
-                 ollama_api_url: str = "http://localhost:11434"):
+                 ollama_api_url: str = "http://localhost:11434",
+                 provider_service = None):
         """
         Initialize the RAG Service.
         
@@ -65,17 +66,20 @@ class RAGService:
             persist_directory: Directory for vector store persistence
             llm_model_name: Ollama model name
             ollama_api_url: Ollama API base URL
+            provider_service: Provider service for determining current LLM provider
         """
         self.embedding_model = embedding_model
         self.collection_name = collection_name
         self.persist_directory = persist_directory or str(PROJECT_ROOT / "vector_db")
         self.llm_model_name = llm_model_name
         self.ollama_api_url = ollama_api_url
+        self.provider_service = provider_service
         
         # Initialize components
         self.embedding_generator = None
         self.vector_store = None
-        self.llm = None
+        self.local_llm = None  # Ollama LLM
+        self.cloud_llm = None  # Gemini LLM
         self.initialized = False
         
         # Performance statistics
@@ -100,7 +104,7 @@ class RAGService:
         logger.info(f"Embedding Model: {self.embedding_model}")
     
     def _initialize_components(self):
-        """Initialize RAG pipeline components."""
+        """Initialize RAG pipeline components with hybrid LLM support."""
         if not MODULES_AVAILABLE:
             logger.error("RAG modules not available - service will operate in limited mode")
             return
@@ -117,12 +121,44 @@ class RAGService:
             )
             logger.info("Vector store initialized")
             
-            # Initialize LLM
-            self.llm = get_llm(
-                model_name=self.llm_model_name,
-                api_url=self.ollama_api_url
-            )
-            logger.info("LLM initialized")
+            # Initialize Local LLM (Ollama)
+            try:
+                self.local_llm = get_llm(
+                    model_name=self.llm_model_name,
+                    api_url=self.ollama_api_url
+                )
+                logger.info("Local LLM (Ollama) initialized")
+            except Exception as e:
+                logger.warning(f"Local LLM initialization failed: {e}")
+                self.local_llm = None
+            
+            # Initialize Cloud LLM (Gemini)
+            try:
+                import sys
+                from pathlib import Path
+                
+                # Add cloud_deployment to path
+                cloud_path = Path(__file__).parent.parent.parent.parent / "cloud_deployment"
+                if str(cloud_path) not in sys.path:
+                    sys.path.append(str(cloud_path))
+                
+                from api.providers.gemini_provider import GeminiLLMProvider
+                
+                # Check if Gemini API key is available
+                api_key = os.getenv("GEMINI_API_KEY")
+                if api_key and api_key.strip():
+                    self.cloud_llm = GeminiLLMProvider(api_key)
+                    if self.cloud_llm.is_available():
+                        logger.info("Cloud LLM (Gemini) initialized successfully")
+                    else:
+                        logger.warning("Cloud LLM (Gemini) not available")
+                        self.cloud_llm = None
+                else:
+                    logger.info("Cloud LLM (Gemini) not configured - no API key")
+                    self.cloud_llm = None
+            except Exception as e:
+                logger.warning(f"Cloud LLM initialization failed: {e}")
+                self.cloud_llm = None
             
             # Update document count
             try:
@@ -131,8 +167,16 @@ class RAGService:
             except Exception as e:
                 logger.warning(f"Could not get initial document count: {e}")
             
-            self.initialized = True
-            logger.info("RAG Service components initialized successfully")
+            # Service is available if we have at least one LLM
+            self.initialized = self.local_llm is not None or self.cloud_llm is not None
+            
+            if self.initialized:
+                available_llms = []
+                if self.local_llm: available_llms.append("Ollama")
+                if self.cloud_llm: available_llms.append("Gemini")
+                logger.info(f"RAG Service initialized successfully with LLMs: {', '.join(available_llms)}")
+            else:
+                logger.error("RAG Service initialization failed - no LLMs available")
             
         except Exception as e:
             logger.error(f"Failed to initialize RAG components: {e}")
@@ -141,6 +185,30 @@ class RAGService:
     def is_available(self) -> bool:
         """Check if RAG service is available."""
         return MODULES_AVAILABLE and self.initialized
+    
+    def _get_current_llm(self):
+        """Get the current LLM based on provider selection."""
+        # Check if provider service is available and get current provider
+        if self.provider_service:
+            current_provider = self.provider_service.current_provider
+            
+            if current_provider == "cloud" and self.cloud_llm:
+                logger.info("Using Cloud LLM (Gemini) for RAG processing")
+                return self.cloud_llm, "cloud"
+            elif current_provider == "local" and self.local_llm:
+                logger.info("Using Local LLM (Ollama) for RAG processing")
+                return self.local_llm, "local"
+        
+        # Fallback logic: prioritize available LLMs
+        if self.local_llm:
+            logger.info("Fallback to Local LLM (Ollama) for RAG processing")
+            return self.local_llm, "local"
+        elif self.cloud_llm:
+            logger.info("Fallback to Cloud LLM (Gemini) for RAG processing")
+            return self.cloud_llm, "cloud"
+        
+        logger.error("No LLM available for RAG processing")
+        return None, None
     
     async def add_document(self, 
                           title: str, 
@@ -378,19 +446,49 @@ class RAGService:
                 logger.warning("No context documents found for query")
                 context_docs = ["No relevant information found in the knowledge base."]
             
-            # Step 2: Create RAG prompt with retrieved context
-            rag_prompt = self.llm.create_rag_prompt(
-                query=query,
-                context_docs=context_docs
-            )
+            # Step 2: Determine which LLM to use based on provider selection
+            current_llm, llm_type = self._get_current_llm()
+            if not current_llm:
+                raise Exception("No LLM provider available")
             
-            # Step 3: Generate response with LLM
+            # Step 3: Generate response with appropriate LLM
             generation_start = time.time()
-            llm_response = self.llm.generate_response(
-                prompt=rag_prompt,
-                max_tokens=max_tokens,
-                temperature=temperature
-            )
+            
+            if llm_type == "cloud":
+                # Use Gemini for cloud provider
+                context_text = " ".join(context_docs)
+                llm_response = current_llm.generate_rag_response(
+                    query=query,
+                    context=context_text,
+                    conversation_history=None  # Could be extended to support conversation history
+                )
+                
+                # Convert Gemini response format to match expected format
+                if llm_response.get('success'):
+                    llm_response = {
+                        'text': llm_response['response'],
+                        'tokens_used': llm_response.get('token_count', 0),
+                        'provider': 'gemini'
+                    }
+                else:
+                    raise Exception(f"Cloud LLM error: {llm_response.get('error', 'Unknown error')}")
+            else:
+                # Use Ollama for local provider
+                rag_prompt = current_llm.create_rag_prompt(
+                    query=query,
+                    context_docs=context_docs
+                )
+                
+                llm_response = current_llm.generate_response(
+                    prompt=rag_prompt,
+                    max_tokens=max_tokens,
+                    temperature=temperature
+                )
+                
+                # Ensure response has the expected format
+                if llm_response and 'text' not in llm_response:
+                    llm_response['provider'] = 'ollama'
+            
             generation_duration = time.time() - generation_start
             
             overall_duration = time.time() - overall_start_time
@@ -453,14 +551,35 @@ class RAGService:
         total_queries = self.stats['queries_processed']
         success_rate = (self.stats['successful_queries'] / total_queries * 100) if total_queries > 0 else 0.0
         
+        # Determine current LLM status
+        current_llm_info = "None"
+        if self.provider_service:
+            if self.provider_service.current_provider == "cloud" and self.cloud_llm:
+                current_llm_info = "Gemini 2.5 Flash (Cloud)"
+            elif self.provider_service.current_provider == "local" and self.local_llm:
+                current_llm_info = f"{self.llm_model_name} (Local)"
+            else:
+                current_llm_info = "Provider mismatch"
+        else:
+            # Fallback status
+            if self.local_llm and self.cloud_llm:
+                current_llm_info = f"Hybrid: {self.llm_model_name} + Gemini"
+            elif self.local_llm:
+                current_llm_info = f"{self.llm_model_name} (Local only)"
+            elif self.cloud_llm:
+                current_llm_info = "Gemini (Cloud only)"
+        
         return {
             **self.stats,
             'success_rate': success_rate,
             'service_status': 'available' if self.is_available() else 'unavailable',
             'components': {
                 'embedding_model': self.embedding_model,
-                'llm_model': self.llm_model_name,
-                'vector_store': self.collection_name
+                'llm_model': current_llm_info,
+                'vector_store': self.collection_name,
+                'local_llm_available': self.local_llm is not None,
+                'cloud_llm_available': self.cloud_llm is not None,
+                'current_provider': self.provider_service.current_provider if self.provider_service else "unknown"
             }
         }
     
@@ -525,5 +644,12 @@ def get_rag_service() -> RAGService:
     """Get or create the singleton RAGService instance."""
     global _rag_service
     if _rag_service is None:
-        _rag_service = RAGService()
+        # Import here to avoid circular imports
+        try:
+            from ..core.dependencies import get_provider_service
+            provider_service = get_provider_service()
+            _rag_service = RAGService(provider_service=provider_service)
+        except:
+            # Fallback without provider service
+            _rag_service = RAGService()
     return _rag_service

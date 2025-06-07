@@ -62,7 +62,7 @@ class GCPSTTProvider:
     def transcribe_audio(self, 
                         audio_data: bytes, 
                         language_code: Optional[str] = None,
-                        sample_rate: int = 16000,
+                        sample_rate: int = 48000,
                         audio_format: str = "wav") -> Dict[str, Any]:
         """
         Transcribe audio data to text using Google Cloud Speech-to-Text.
@@ -194,7 +194,7 @@ class GCPSTTProvider:
                                    audio_data: bytes,
                                    language_code: Optional[str] = None,
                                    max_alternatives: int = 3,
-                                   sample_rate: int = 16000,
+                                   sample_rate: int = 48000,
                                    audio_format: str = "wav") -> Dict[str, Any]:
         """
         Transcribe audio with multiple alternative interpretations.

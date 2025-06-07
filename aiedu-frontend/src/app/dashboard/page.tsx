@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/services/api'
+import EnhancedProviderSelector from '@/components/providers/EnhancedProviderSelector'
 
 interface SystemStats {
   backend: {
@@ -36,7 +37,7 @@ export default function DashboardPage() {
         const [healthResponse, voicesResponse, ragResponse] = await Promise.allSettled([
           apiClient.health(),
           apiClient.getVoices(),
-          apiClient.ragHealth()
+          apiClient.getRagHealth()
         ])
 
         setStats({
@@ -132,12 +133,20 @@ export default function DashboardPage() {
             </div>
             
             <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-3">
+              <Link
+                href="/provider-demo"
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white rounded-lg transition-all text-sm font-medium"
+              >
+                🚀 Phase 7A Demo
+              </Link>
               <Link
                 href="/"
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all"
               >
                 Launch AIEDU
               </Link>
+            </div>
             </div>
           </div>
         </div>
@@ -219,6 +228,27 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Phase 7A: Enhanced Provider Selection Interface */}
+        <div className="mb-8">
+          <div className="mb-6 text-center">
+            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-emerald-500 text-white px-4 py-2 rounded-full text-sm font-medium mb-2">
+              🚀 Phase 7A: Enhanced User Experience
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">AI Provider Control Center</h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Switch seamlessly between local (privacy-focused) and cloud (performance-optimized) AI providers. 
+              Experience the power of choice with real-time provider status monitoring.
+            </p>
+          </div>
+          
+          <div className="max-w-4xl mx-auto">
+            <EnhancedProviderSelector 
+              defaultExpanded={true}
+              showRefreshButton={true}
+            />
+          </div>
+        </div>
+
         {/* Feature Cards */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Available Interfaces</h2>
@@ -256,57 +286,57 @@ export default function DashboardPage() {
 
         {/* Architecture Overview */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">System Architecture</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Hybrid System Architecture</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Frontend Stack</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Local AI Stack (Privacy)</h3>
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">⚛️</div>
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">🎤</div>
                   <div>
-                    <div className="font-medium text-gray-900">Next.js 15</div>
-                    <div className="text-sm text-gray-600">React framework with TypeScript</div>
+                    <div className="font-medium text-gray-900">Vosk STT</div>
+                    <div className="text-sm text-gray-600">Offline speech recognition</div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center text-cyan-600">🎨</div>
+                  <div className="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center text-cyan-600">🔊</div>
                   <div>
-                    <div className="font-medium text-gray-900">Tailwind CSS</div>
-                    <div className="text-sm text-gray-600">Utility-first styling</div>
+                    <div className="font-medium text-gray-900">espeak TTS</div>
+                    <div className="text-sm text-gray-600">Local voice synthesis</div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">📘</div>
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">🧠</div>
                   <div>
-                    <div className="font-medium text-gray-900">TypeScript</div>
-                    <div className="text-sm text-gray-600">Type-safe development</div>
+                    <div className="font-medium text-gray-900">Ollama + Mistral 7B</div>
+                    <div className="text-sm text-gray-600">Local language model</div>
                   </div>
                 </div>
               </div>
             </div>
             
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Backend Stack</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Cloud AI Stack (Performance)</h3>
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center text-green-600">⚡</div>
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center text-green-600">☁️</div>
                   <div>
-                    <div className="font-medium text-gray-900">FastAPI</div>
-                    <div className="text-sm text-gray-600">High-performance Python API</div>
+                    <div className="font-medium text-gray-900">Google Cloud STT</div>
+                    <div className="text-sm text-gray-600">Neural speech recognition</div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600">🧠</div>
+                  <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600">🎵</div>
                   <div>
-                    <div className="font-medium text-gray-900">Ollama + ChromaDB</div>
-                    <div className="text-sm text-gray-600">Local AI and vector storage</div>
+                    <div className="font-medium text-gray-900">Google Cloud TTS</div>
+                    <div className="text-sm text-gray-600">Neural voice synthesis</div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center text-red-600">🎤</div>
+                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center text-red-600">✨</div>
                   <div>
-                    <div className="font-medium text-gray-900">Vosk + espeak</div>
-                    <div className="text-sm text-gray-600">Speech recognition & synthesis</div>
+                    <div className="font-medium text-gray-900">Gemini 2.5 Flash</div>
+                    <div className="text-sm text-gray-600">Advanced language model</div>
                   </div>
                 </div>
               </div>
@@ -317,7 +347,7 @@ export default function DashboardPage() {
         {/* Footer */}
         <div className="mt-12 text-center text-gray-500">
           <p className="text-sm">
-            AIEDU System • Phase 6C Complete • Built with Next.js & FastAPI
+            AIEDU System • Phase 7A Complete • Hybrid Local/Cloud AI Provider System
           </p>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
@@ -27,9 +27,23 @@ class Settings(BaseSettings):
     # Provider Configuration
     default_provider: str = "local"
     
+    # Google Cloud Configuration
+    gemini_api_key: Optional[str] = None
+    google_application_credentials: Optional[str] = None
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "allow"  # Allow extra fields from environment
 
 # Global settings instance
 settings = Settings()
+
+# Ensure Google Cloud credentials are available in os.environ for Google Cloud SDK
+if settings.google_application_credentials and not os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = settings.google_application_credentials
+    print(f"✅ Set GOOGLE_APPLICATION_CREDENTIALS in os.environ (length: {len(settings.google_application_credentials)})")
+
+if settings.gemini_api_key and not os.environ.get('GEMINI_API_KEY'):
+    os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
+    print(f"✅ Set GEMINI_API_KEY in os.environ")

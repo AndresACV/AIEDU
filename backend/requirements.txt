@@ -1,7 +1,14 @@
 fastapi==0.115.9
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
+pydantic-settings>=2.0.0
 python-multipart==0.0.6
+
+# Google Cloud Services (for cloud speech providers)
+google-cloud-speech>=2.21.0  # Google Cloud Speech-to-Text
+google-cloud-texttospeech>=2.16.3  # Google Cloud Text-to-Speech
+google-auth>=2.23.0          # Google Cloud authentication
+google-generativeai>=0.8.3   # Google Gemini AI
 
 # Keep existing AI/ML dependencies from main project
 chromadb>=0.4.17

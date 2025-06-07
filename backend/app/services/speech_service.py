@@ -2,6 +2,7 @@
 Speech Service Module
 Provides text-to-speech and speech-to-text functionality for the FastAPI backend.
 Migrated from Flask hybrid_speech.py with enhanced FastAPI integration.
+Supports both local (Vosk, espeak) and cloud (Google Cloud) providers.
 """
 
 import os
@@ -13,6 +14,7 @@ import subprocess
 import platform
 import json
 import wave
+import time
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
@@ -24,23 +26,30 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 VOSK_MODELS_PATH = PROJECT_ROOT / "local_deployment" / "web_app" / "models"
 
+# Add cloud_deployment to path for Google Cloud providers
+CLOUD_PATH = PROJECT_ROOT / "cloud_deployment"
+if str(CLOUD_PATH) not in sys.path:
+    sys.path.append(str(CLOUD_PATH))
+
 class SpeechService:
     """
     FastAPI Speech Service providing TTS and STT functionality.
     
     Features:
-    - Text-to-Speech: espeak (Linux/WSL2) and pyttsx3 (Windows)
-    - Speech-to-Text: Vosk models for English and Spanish
+    - Text-to-Speech: Local (espeak/pyttsx3) and Cloud (Google Cloud TTS)
+    - Speech-to-Text: Local (Vosk models) and Cloud (Google Cloud STT)
     - Multi-platform support with automatic detection
+    - Provider switching capability
     - Audio file management and cleanup
     """
     
-    def __init__(self, audio_folder: str = None):
+    def __init__(self, audio_folder: str = None, provider: str = "local"):
         """
         Initialize the Speech Service.
         
         Args:
             audio_folder: Directory to store generated audio files
+            provider: Provider type ("local" or "cloud")
         """
         if audio_folder:
             self.audio_folder = audio_folder
@@ -50,7 +59,10 @@ class SpeechService:
             self.audio_folder = str(repo_root / "audio_files")
         
         self.platform = platform.system()
+        self.provider = provider
         self.vosk_models = {}
+        self.cloud_stt_provider = None
+        self.cloud_tts_provider = None
         self.performance_stats = {
             'stt_calls': 0,
             'tts_calls': 0,
@@ -63,15 +75,88 @@ class SpeechService:
         # Ensure audio folder exists
         os.makedirs(self.audio_folder, exist_ok=True)
         
+        # Initialize providers based on selection
+        if provider == "local":
+            self._initialize_local_providers()
+        else:
+            self._initialize_cloud_providers()
+        
+        logger.info(f"Speech Service initialized for {self.platform} with {provider} provider")
+        logger.info(f"Audio folder: {self.audio_folder}")
+        if provider == "local":
+            logger.info(f"Vosk models available: {list(self.vosk_models.keys())}")
+    
+    def set_provider(self, provider: str):
+        """Switch between local and cloud providers."""
+        old_provider = self.provider
+        self.provider = provider
+        
+        if provider == "local":
+            self._initialize_local_providers()
+        else:
+            self._initialize_cloud_providers()
+            
+        logger.info(f"Switched speech provider from {old_provider} to {provider}")
+    
+    def _initialize_local_providers(self):
+        """Initialize local speech providers (Vosk, espeak)."""
         # Initialize Vosk models
         self._initialize_vosk_models()
-        
         # Check TTS dependencies
         self._check_tts_dependencies()
         
-        logger.info(f"Speech Service initialized for {self.platform}")
-        logger.info(f"Audio folder: {self.audio_folder}")
-        logger.info(f"Vosk models available: {list(self.vosk_models.keys())}")
+    def _initialize_cloud_providers(self):
+        """Initialize cloud speech providers (Google Cloud)."""
+        try:
+            from api.providers.gcp_stt_provider import GCPSTTProvider
+            from api.providers.gcp_tts_provider import GCPTTSProvider
+            
+            # Test Google Cloud STT provider
+            try:
+                self.cloud_stt_provider = GCPSTTProvider()
+                # Test the provider is working
+                if not self.cloud_stt_provider.is_available():
+                    logger.warning("Google Cloud STT provider is not available - credentials may be invalid")
+                    self.cloud_stt_provider = None
+                else:
+                    logger.info("Google Cloud STT provider initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize Google Cloud STT provider: {e}")
+                self.cloud_stt_provider = None
+            
+            # Test Google Cloud TTS provider
+            try:
+                self.cloud_tts_provider = GCPTTSProvider(
+                    audio_format="wav",  # Use WAV format to match our system
+                    speaking_rate=1.0,
+                    pitch=0.0
+                )
+                logger.info("Google Cloud TTS provider initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize Google Cloud TTS provider: {e}")
+                self.cloud_tts_provider = None
+            
+            # If both providers failed, log warning
+            if not self.cloud_stt_provider and not self.cloud_tts_provider:
+                logger.warning("Both Google Cloud speech providers failed to initialize - falling back to local providers")
+                self._initialize_local_providers()
+            elif not self.cloud_stt_provider:
+                logger.warning("Google Cloud STT provider failed - STT will use local Vosk")
+            elif not self.cloud_tts_provider:
+                logger.warning("Google Cloud TTS provider failed - TTS will use local espeak")
+            
+        except ImportError as e:
+            logger.error(f"Google Cloud libraries not available: {e}")
+            self.cloud_stt_provider = None
+            self.cloud_tts_provider = None
+            # Fall back to local providers
+            self._initialize_local_providers()
+        except Exception as e:
+            logger.error(f"Failed to initialize Google Cloud providers: {e}")
+            self.cloud_stt_provider = None
+            self.cloud_tts_provider = None
+            # Fall back to local providers
+            self._initialize_local_providers()
     
     def _initialize_vosk_models(self):
         """Initialize Vosk speech recognition models."""
@@ -132,7 +217,7 @@ class SpeechService:
     
     async def synthesize_speech(self, text: str, voice_id: str = None, language: str = "en-US") -> Dict[str, Any]:
         """
-        Convert text to speech using platform-appropriate TTS engine.
+        Convert text to speech using selected provider.
         
         Args:
             text: Text to synthesize
@@ -146,10 +231,104 @@ class SpeechService:
         start_time = time.time()
         
         try:
+            logger.info(f"🎯 SpeechService.synthesize_speech called")
+            logger.info(f"📝 Text length: {len(text)} characters")
+            logger.info(f"🌍 Language: {language}")
+            logger.info(f"🎤 Voice ID: {voice_id}")
+            
             self.performance_stats['tts_calls'] += 1
             
+            # Get current provider from provider service
+            from ..core.dependencies import get_provider_service
+            provider_service = get_provider_service()
+            current_provider = provider_service.current_provider
+            
+            # Update our provider if it has changed
+            if self.provider != current_provider:
+                logger.info(f"🔄 Switching TTS provider from {self.provider} to {current_provider}")
+                self.set_provider(current_provider)
+            
+            # Try cloud provider first if requested and available
+            if self.provider == "cloud" and self.cloud_tts_provider:
+                logger.info("🌩️ Using Google Cloud TTS")
+                return await self._synthesize_with_cloud(text, voice_id, language, start_time)
+            elif self.provider == "cloud" and not self.cloud_tts_provider:
+                logger.warning("☁️ Cloud TTS requested but not available - falling back to local espeak")
+                return await self._synthesize_with_local(text, voice_id, language, start_time)
+            else:
+                logger.info("🏠 Using local espeak TTS")
+                return await self._synthesize_with_local(text, voice_id, language, start_time)
+                
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"Error in speech synthesis: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'duration': duration
+            }
+    
+    async def _synthesize_with_cloud(self, text: str, voice_id: str, language: str, start_time: float) -> Dict[str, Any]:
+        """Synthesize speech using Google Cloud TTS."""
+        try:
+            # Determine voice name
+            if voice_id and voice_id.startswith(('es-ES', 'en-US')):
+                voice_name = voice_id
+            else:
+                # Default voices
+                if language.startswith("es"):
+                    voice_name = "es-ES-Neural2-C"
+                else:
+                    voice_name = "en-US-Neural2-F"
+            
             # Generate unique filename
-            audio_filename = f"tts_{uuid.uuid4().hex[:8]}.wav"
+            audio_filename = f"tts_cloud_{uuid.uuid4().hex[:8]}.wav"
+            audio_path = os.path.join(self.audio_folder, audio_filename)
+            
+            # Use Google Cloud TTS
+            result = self.cloud_tts_provider.save_audio_to_file(
+                text=text,
+                output_path=audio_path,
+                language_code=language,
+                voice_name=voice_name
+            )
+            
+            duration = time.time() - start_time
+            
+            if result["status"] == "success":
+                self.performance_stats['tts_success'] += 1
+                self._update_avg_time('tts', duration)
+                
+                return {
+                    'success': True,
+                    'audio_path': audio_path,
+                    'audio_filename': audio_filename,
+                    'voice_used': f"Google Cloud {voice_name}",
+                    'duration': duration,
+                    'file_size': result.get('file_size', 0),
+                    'provider': 'Google Cloud TTS'
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': result.get('error', 'Cloud TTS failed'),
+                    'duration': duration
+                }
+                
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"Cloud TTS error: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'duration': duration
+            }
+    
+    async def _synthesize_with_local(self, text: str, voice_id: str, language: str, start_time: float) -> Dict[str, Any]:
+        """Synthesize speech using local TTS (espeak/pyttsx3)."""
+        try:
+            # Generate unique filename
+            audio_filename = f"tts_local_{uuid.uuid4().hex[:8]}.wav"
             audio_path = os.path.join(self.audio_folder, audio_filename)
             
             # Determine voice based on language and voice_id
@@ -179,18 +358,220 @@ class SpeechService:
                     'audio_filename': audio_filename,
                     'voice_used': voice_name,
                     'duration': duration,
-                    'file_size': os.path.getsize(audio_path) if os.path.exists(audio_path) else 0
+                    'file_size': os.path.getsize(audio_path) if os.path.exists(audio_path) else 0,
+                    'provider': 'Local TTS'
                 }
             else:
                 return {
                     'success': False,
-                    'error': 'TTS synthesis failed',
+                    'error': 'Local TTS synthesis failed',
                     'duration': duration
                 }
                 
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(f"Error in speech synthesis: {e}")
+            logger.error(f"Local TTS error: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'duration': duration
+            }
+    
+    async def transcribe_audio(self, audio_path: str, language: str = "en-US") -> Dict[str, Any]:
+        """
+        Transcribe audio file using selected provider.
+        
+        Args:
+            audio_path: Path to audio file
+            language: Language code (e.g., "en-US", "es-ES")
+            
+        Returns:
+            Dict with transcription results
+        """
+        import time
+        start_time = time.time()
+        
+        try:
+            logger.info(f"🎯 SpeechService.transcribe_audio called with: {audio_path}")
+            logger.info(f"📏 Input file size: {os.path.getsize(audio_path) if os.path.exists(audio_path) else 'FILE NOT FOUND'} bytes")
+            
+            self.performance_stats['stt_calls'] += 1
+            
+            # Get current provider from provider service
+            from ..core.dependencies import get_provider_service
+            provider_service = get_provider_service()
+            current_provider = provider_service.current_provider
+            
+            # Update our provider if it has changed
+            if self.provider != current_provider:
+                logger.info(f"🔄 Switching STT provider from {self.provider} to {current_provider}")
+                self.set_provider(current_provider)
+            
+            # Try cloud provider first if requested and available
+            if self.provider == "cloud" and self.cloud_stt_provider:
+                logger.info("🌩️ Using Google Cloud STT")
+                return await self._transcribe_with_cloud(audio_path, language, start_time)
+            elif self.provider == "cloud" and not self.cloud_stt_provider:
+                logger.warning("☁️ Cloud STT requested but not available - falling back to local Vosk")
+                return await self._transcribe_with_local(audio_path, language, start_time)
+            else:
+                logger.info("🏠 Using local Vosk STT")
+                return await self._transcribe_with_local(audio_path, language, start_time)
+                
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"Error in speech transcription: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'duration': duration
+            }
+    
+    async def _transcribe_with_cloud(self, audio_path: str, language: str, start_time: float) -> Dict[str, Any]:
+        """Transcribe audio using Google Cloud STT."""
+        try:
+            # Read audio file
+            with open(audio_path, 'rb') as audio_file:
+                audio_data = audio_file.read()
+            
+            # Detect audio format and configure accordingly
+            file_ext = os.path.splitext(audio_path)[1].lower().lstrip('.')
+            
+            if file_ext == 'wav':
+                # For WAV files, detect exact sample rate
+                try:
+                    import wave
+                    with wave.open(audio_path, 'rb') as wav_file:
+                        sample_rate = wav_file.getframerate()
+                        audio_format = "wav"
+                        logger.info(f"🎵 Detected WAV sample rate: {sample_rate} Hz")
+                except Exception as e:
+                    logger.warning(f"Could not read WAV properties: {e}, using default 16000 Hz")
+                    sample_rate = 16000
+                    audio_format = "wav"
+            elif file_ext == 'webm':
+                # For WebM files, use OPUS encoding with standard sample rates
+                # WebM typically uses 48000 Hz, but let Google Cloud auto-detect
+                sample_rate = 48000  # Standard for WebM OPUS
+                audio_format = "webm"
+                logger.info(f"🎥 Detected WebM file, using OPUS encoding with {sample_rate} Hz")
+            elif file_ext in ['mp3', 'flac', 'ogg']:
+                # For other formats, use appropriate defaults
+                sample_rate = 16000  # Common default
+                audio_format = file_ext
+                logger.info(f"🎵 Detected {file_ext.upper()} file, using {sample_rate} Hz")
+            else:
+                # Unknown format, treat as WAV with default sample rate
+                sample_rate = 16000
+                audio_format = "wav"
+                logger.warning(f"Unknown audio format '{file_ext}', treating as WAV with {sample_rate} Hz")
+            
+            # Use Google Cloud STT with detected configuration
+            logger.info(f"🌩️ Transcribing with Google Cloud STT: format={audio_format}, sample_rate={sample_rate}")
+            result = self.cloud_stt_provider.transcribe_audio(
+                audio_data=audio_data,
+                language_code=language,
+                sample_rate=sample_rate,
+                audio_format=audio_format
+            )
+            
+            duration = time.time() - start_time
+            
+            if result["status"] == "success":
+                self.performance_stats['stt_success'] += 1
+                self._update_avg_time('stt', duration)
+                
+                transcript_text = result["transcript"]
+                logger.info(f"✅ Cloud STT success: '{transcript_text[:50]}...' (confidence: {result.get('confidence', 0):.3f})")
+                
+                # Convert Google Cloud format to our format
+                return {
+                    'success': True,
+                    'text': transcript_text,  # Use 'text' field to match frontend expectations
+                    'confidence': result.get("confidence", 0.0),
+                    'language': result.get("language_detected", language),
+                    'model_used': "Google Cloud STT",
+                    'duration': duration,
+                    'words': result.get("words", []),
+                    'provider': 'Google Cloud STT'
+                }
+            else:
+                logger.error(f"❌ Cloud STT failed: {result.get('error', 'No results returned')}")
+                return {
+                    'success': False,
+                    'error': result.get('error', 'Cloud STT failed'),
+                    'duration': duration
+                }
+                
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"Cloud STT error: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'duration': duration
+            }
+    
+    async def _transcribe_with_local(self, audio_path: str, language: str, start_time: float) -> Dict[str, Any]:
+        """Transcribe audio using local Vosk models."""
+        try:
+            # Check if we have the model for this language
+            if language not in self.vosk_models:
+                available_languages = list(self.vosk_models.keys())
+                logger.warning(f"Language {language} not available. Available: {available_languages}")
+                # Fallback to English if available
+                if "en-US" in self.vosk_models:
+                    language = "en-US"
+                    logger.info("Falling back to English (en-US)")
+                else:
+                    return {
+                        'success': False,
+                        'error': f'No Vosk model available for {language}',
+                        'available_languages': available_languages
+                    }
+            
+            # Get the model
+            vosk_model = self.vosk_models[language]["model"]
+            logger.info(f"📈 Using Vosk model for {language}")
+            
+            # Copy file to permanent storage for debugging
+            import uuid
+            debug_filename = f"debug_recording_{uuid.uuid4().hex[:8]}{os.path.splitext(audio_path)[1]}"
+            debug_path = os.path.join(self.audio_folder, debug_filename)
+            import shutil
+            shutil.copy2(audio_path, debug_path)
+            logger.info(f"💾 Copied input file to permanent storage: {debug_path}")
+            
+            # Perform transcription
+            logger.info(f"🔍 Starting Vosk transcription...")
+            result = await self._transcribe_with_vosk(audio_path, vosk_model)
+            
+            duration = time.time() - start_time
+            
+            if result['success']:
+                self.performance_stats['stt_success'] += 1
+                self._update_avg_time('stt', duration)
+                
+                return {
+                    'success': True,
+                    'text': result['transcript'],  # Use 'text' field to match frontend expectations
+                    'confidence': result.get('confidence', 0.0),
+                    'language': language,
+                    'model_used': self.vosk_models[language]["name"],
+                    'duration': duration,
+                    'words': result.get('words', []),
+                    'provider': 'Local Vosk'
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': result['error'],
+                    'duration': duration
+                }
+                
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"Local STT error: {e}")
             return {
                 'success': False,
                 'error': str(e),
@@ -260,88 +641,6 @@ class SpeechService:
         except Exception as e:
             logger.error(f"pyttsx3 synthesis error: {e}")
             return False
-    
-    async def transcribe_audio(self, audio_path: str, language: str = "en-US") -> Dict[str, Any]:
-        """
-        Transcribe audio file using Vosk speech recognition.
-        
-        Args:
-            audio_path: Path to audio file
-            language: Language code (e.g., "en-US", "es-ES")
-            
-        Returns:
-            Dict with transcription results
-        """
-        import time
-        start_time = time.time()
-        
-        try:
-            logger.info(f"🎯 SpeechService.transcribe_audio called with: {audio_path}")
-            logger.info(f"📏 Input file size: {os.path.getsize(audio_path) if os.path.exists(audio_path) else 'FILE NOT FOUND'} bytes")
-            
-            self.performance_stats['stt_calls'] += 1
-            
-            # Check if we have the model for this language
-            if language not in self.vosk_models:
-                available_languages = list(self.vosk_models.keys())
-                logger.warning(f"Language {language} not available. Available: {available_languages}")
-                # Fallback to English if available
-                if "en-US" in self.vosk_models:
-                    language = "en-US"
-                    logger.info("Falling back to English (en-US)")
-                else:
-                    return {
-                        'success': False,
-                        'error': f'No Vosk model available for {language}',
-                        'available_languages': available_languages
-                    }
-            
-            # Get the model
-            vosk_model = self.vosk_models[language]["model"]
-            logger.info(f"📈 Using Vosk model for {language}")
-            
-            # Copy file to permanent storage for debugging
-            import uuid
-            debug_filename = f"debug_recording_{uuid.uuid4().hex[:8]}{os.path.splitext(audio_path)[1]}"
-            debug_path = os.path.join(self.audio_folder, debug_filename)
-            import shutil
-            shutil.copy2(audio_path, debug_path)
-            logger.info(f"💾 Copied input file to permanent storage: {debug_path}")
-            
-            # Perform transcription
-            logger.info(f"🔍 Starting Vosk transcription...")
-            result = await self._transcribe_with_vosk(audio_path, vosk_model)
-            
-            duration = time.time() - start_time
-            
-            if result['success']:
-                self.performance_stats['stt_success'] += 1
-                self._update_avg_time('stt', duration)
-                
-                return {
-                    'success': True,
-                    'transcript': result['transcript'],
-                    'confidence': result.get('confidence', 0.0),
-                    'language': language,
-                    'model_used': self.vosk_models[language]["name"],
-                    'duration': duration,
-                    'words': result.get('words', [])
-                }
-            else:
-                return {
-                    'success': False,
-                    'error': result['error'],
-                    'duration': duration
-                }
-                
-        except Exception as e:
-            duration = time.time() - start_time
-            logger.error(f"Error in speech transcription: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'duration': duration
-            }
     
     async def _transcribe_with_vosk(self, audio_path: str, model) -> Dict[str, Any]:
         """Transcribe audio using Vosk model."""

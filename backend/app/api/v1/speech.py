@@ -185,10 +185,11 @@ async def transcribe_audio(
             logger.error(f"❌ Transcription error: {result.get('error', 'Unknown error')}")
         
         if result['success']:
-            logger.info(f"✅ Transcription successful: '{result['transcript'][:50]}...'")
+            transcript_text = result['text']  # Use 'text' field that speech service returns
+            logger.info(f"✅ Transcription successful: '{transcript_text[:50]}...'")
             return TranscribeResponse(
                 success=True,
-                text=result['transcript'],
+                text=transcript_text,
                 confidence=result['confidence'],
                 language=result['language'],
                 model_used=result['model_used'],

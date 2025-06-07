@@ -16,10 +16,21 @@ def get_provider_service() -> ProviderService:
     return _provider_service
 
 def get_speech_service() -> SpeechService:
-    """Dependency to get the speech service instance."""
-    global _speech_service
+    """Dependency to get the speech service instance with correct provider."""
+    global _speech_service, _provider_service
+    
+    # Ensure provider service exists
+    if _provider_service is None:
+        _provider_service = ProviderService()
+    
+    # Initialize or update speech service with current provider
     if _speech_service is None:
-        _speech_service = SpeechService()
+        _speech_service = SpeechService(provider=_provider_service.current_provider)
+    else:
+        # Update provider if it has changed
+        if _speech_service.provider != _provider_service.current_provider:
+            _speech_service.set_provider(_provider_service.current_provider)
+    
     return _speech_service
 
 def get_rag_service() -> RAGService:
@@ -41,10 +52,10 @@ def initialize_services():
     try:
         _provider_service = ProviderService()
         print("✅ Provider service initialized")
-        _speech_service = SpeechService()
-        print("✅ Speech service initialized")
-        _rag_service = RAGService()
-        print("✅ RAG service initialized")
+        _speech_service = SpeechService(provider=_provider_service.current_provider)
+        print(f"✅ Speech service initialized with {_provider_service.current_provider} provider")
+        _rag_service = RAGService(provider_service=_provider_service)
+        print("✅ RAG service initialized with provider service")
         print("✅ All services initialized successfully")
     except Exception as e:
         print(f"❌ Error initializing services: {e}")

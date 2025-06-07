@@ -2,6 +2,12 @@
 flask>=2.0.1
 werkzeug>=2.0.1
 
+# FastAPI (New Primary Backend)
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+python-multipart>=0.0.6
+
 # SSL/HTTPS Support
 pyOpenSSL>=23.0.0            # For SSL certificate generation (used in app.py)
 
@@ -13,6 +19,12 @@ vosk>=0.3.45                 # Offline speech recognition models
 pydub>=0.25.1                # Audio file manipulation and format conversion
 soundfile>=0.10.3            # Audio file I/O
 ffmpeg-python>=0.2.0         # FFmpeg Python bindings for audio conversion
+
+# Google Cloud Services (for cloud speech providers)
+google-cloud-speech>=2.21.0  # Google Cloud Speech-to-Text
+google-cloud-texttospeech>=2.16.3  # Google Cloud Text-to-Speech
+google-auth>=2.23.0          # Google Cloud authentication
+google-generativeai>=0.8.3   # Google Gemini AI
 
 # RAG System Components
 sentence-transformers>=2.2.2 # For embedding generation

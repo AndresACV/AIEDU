@@ -2,6 +2,7 @@ from typing import Dict, Any
 import os
 import logging
 import requests
+import json
 from ..models.providers import ProviderType, ProviderResponse, ProviderInfo, ProvidersDict
 
 logger = logging.getLogger(__name__)
@@ -165,61 +166,67 @@ class ProviderService:
     
     def _check_google_cloud_stt(self) -> str:
         """Check if Google Cloud STT is available."""
-        credentials_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not credentials_env:
+        try:
+            # Import the existing cloud provider
+            import sys
+            from pathlib import Path
+            
+            # Add cloud_deployment to path
+            cloud_path = Path(__file__).parent.parent.parent.parent / "cloud_deployment"
+            if str(cloud_path) not in sys.path:
+                sys.path.append(str(cloud_path))
+            
+            from api.providers.gcp_stt_provider import GCPSTTProvider
+            
+            # Try to initialize the provider
+            provider = GCPSTTProvider()
+            
+            # Test if the provider is available
+            if provider.is_available():
+                logger.info("Google Cloud STT provider initialized successfully")
+                return "available"
+            else:
+                logger.warning("Google Cloud STT provider failed availability check")
+                return "error"
+                
+        except ImportError as e:
+            logger.debug(f"Google Cloud STT libraries not installed: {e}")
             return "error"
-        
-        # Check if it's a file path or JSON string
-        if credentials_env.startswith('{'):
-            # It's a JSON string - Google Cloud libraries will use it
-            try:
-                from google.cloud import speech
-                # Just check if we can import and create client
-                return "available"
-            except ImportError:
-                logger.debug("Google Cloud Speech libraries not installed")
-                return "error"
-            except Exception as e:
-                logger.debug(f"Google Cloud STT error: {e}")
-                return "error"
-        else:
-            # It's a file path
-            if not os.path.exists(credentials_env):
-                return "error"
-            try:
-                from google.cloud import speech
-                return "available"
-            except Exception:
-                return "error"
+        except Exception as e:
+            logger.debug(f"Google Cloud STT error: {e}")
+            return "error"
     
     def _check_google_cloud_tts(self) -> str:
         """Check if Google Cloud TTS is available."""
-        credentials_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not credentials_env:
+        try:
+            # Import the existing cloud provider
+            import sys
+            from pathlib import Path
+            
+            # Add cloud_deployment to path
+            cloud_path = Path(__file__).parent.parent.parent.parent / "cloud_deployment"
+            if str(cloud_path) not in sys.path:
+                sys.path.append(str(cloud_path))
+            
+            from api.providers.gcp_tts_provider import GCPTTSProvider
+            
+            # Try to initialize the provider
+            provider = GCPTTSProvider()
+            
+            # Test if the provider is available
+            if provider.is_available():
+                logger.info("Google Cloud TTS provider initialized successfully")
+                return "available"
+            else:
+                logger.warning("Google Cloud TTS provider failed availability check")
+                return "error"
+                
+        except ImportError as e:
+            logger.debug(f"Google Cloud TTS libraries not installed: {e}")
             return "error"
-        
-        # Check if it's a file path or JSON string
-        if credentials_env.startswith('{'):
-            # It's a JSON string - Google Cloud libraries will use it
-            try:
-                from google.cloud import texttospeech
-                # Just check if we can import
-                return "available"
-            except ImportError:
-                logger.debug("Google Cloud TTS libraries not installed")
-                return "error"
-            except Exception as e:
-                logger.debug(f"Google Cloud TTS error: {e}")
-                return "error"
-        else:
-            # It's a file path
-            if not os.path.exists(credentials_env):
-                return "error"
-            try:
-                from google.cloud import texttospeech
-                return "available"
-            except Exception:
-                return "error"
+        except Exception as e:
+            logger.debug(f"Google Cloud TTS error: {e}")
+            return "error"
     
     def _check_gemini_availability(self) -> str:
         """Check if Gemini LLM is available."""
@@ -232,7 +239,7 @@ class ProviderService:
             genai.configure(api_key=api_key)
             
             # Try to create a model instance
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            model = genai.GenerativeModel('gemini-2.0-flash')
             return "available"
         except Exception:
             return "error"
