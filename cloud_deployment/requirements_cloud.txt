@@ -1,0 +1,34 @@
+# Cloud Deployment Requirements - Google Cloud Stack
+# Optimized for high-performance cloud deployment
+
+# Core web framework
+Flask==3.0.3
+requests>=2.31.0
+
+# Google Cloud AI Services
+google-generativeai>=0.8.0          # Gemini API
+google-cloud-speech>=2.27.0         # Cloud STT
+google-cloud-texttospeech>=2.21.0   # Cloud TTS
+google-cloud-core>=2.4.1
+
+# Cloud Vector Store
+pinecone-client>=4.1.0               # Cloud vector database
+
+# Embeddings and AI utilities
+openai>=1.0.0                        # For embeddings and speech fallbacks
+sentence-transformers>=3.0.1         # Backup embedding model
+
+# Vercel Integration
+vercel==0.2.1                        # Serverless deployment
+
+# Configuration and utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0.1
+
+# Audio processing (lightweight)
+librosa>=0.10.1                      # Audio analysis for cloud
+soundfile>=0.12.1                    # Audio file handling
+
+# Web framework utilities
+werkzeug>=3.0.1
+jinja2>=3.1.2 

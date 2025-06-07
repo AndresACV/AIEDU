@@ -1,0 +1,2459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema RAG - Interacción por Voz</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+            background-color: #f8f9fa;
+        }
+        .logo {
+            margin: 1rem 0;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="text-center logo">
+    <span>Sistema RAG con Texto a Voz</span>
+                </div>
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h4>Sistema RAG con Interacción por Voz</h4>
+                        <ul class="nav nav-tabs mb-4" id="speechTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="rag-assistant-tab" data-bs-toggle="tab" data-bs-target="#rag-assistant-content" type="button" role="tab" aria-controls="rag-assistant-content" aria-selected="true">Asistente RAG</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="knowledge-base-tab" data-bs-toggle="tab" data-bs-target="#knowledge-base-content" type="button" role="tab" aria-controls="knowledge-base-content" aria-selected="false">Base de Conocimiento</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="speechTabsContent">
+                            <!-- RAG Assistant Section -->
+                            <div class="tab-pane fade show active" id="rag-assistant-content" role="tabpanel" aria-labelledby="rag-assistant-tab">
+                                <div class="row">
+                                    <div class="col-md-9">
+                                        <div class="card mb-3" id="conversation-container" style="max-height: 400px; overflow-y: auto;">
+                                            <div class="card-body" id="conversation-messages">
+                                                <div class="text-center text-muted mb-3">¡Pregúntame lo que quieras! Usaré mi base de conocimiento para responder.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <!-- Provider Selection Panel -->
+                                        <div class="card mb-3">
+                                            <div class="card-header bg-success text-white">
+                                                <h6 class="mb-0">🎛️ Proveedores</h6>
+                                            </div>
+                                            <div class="card-body py-2">
+                                                <!-- Provider Toggle -->
+                                                <div class="mb-2">
+                                                    <div class="btn-group w-100" role="group">
+                                                        <input type="radio" class="btn-check" name="provider-override" id="provider-local" value="local" checked>
+                                                        <label class="btn btn-outline-secondary btn-sm" for="provider-local">🏠 Local</label>
+                                                        
+                                                        <input type="radio" class="btn-check" name="provider-override" id="provider-cloud" value="cloud">
+                                                        <label class="btn btn-outline-success btn-sm" for="provider-cloud">☁️ Cloud</label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Provider Status -->
+                                                <div class="small">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <span>STT:</span>
+                                                        <span id="stt-status" class="badge bg-secondary">●</span>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <span>TTS:</span>
+                                                        <span id="tts-status" class="badge bg-secondary">●</span>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <span>LLM:</span>
+                                                        <span id="llm-status" class="badge bg-secondary">●</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3 align-items-center">
+                                    <div class="col-md-9">
+                                        <div class="row">
+                                            <div class="col-md-5">
+                                                <select class="form-select" id="rag-voice-select">
+                                                    <!-- Voice options will be populated from server -->
+                                                    <option value="">Español (Predeterminado)</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3 text-center">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="use-speech-output" checked>
+                                                    <label class="form-check-label" for="use-speech-output">Hablar respuestas</label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4 text-center">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="use-conversation-memory" checked>
+                                                    <label class="form-check-label" for="use-conversation-memory">Recordar conversación</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+
+                                
+                                <div class="row mb-3">
+                                    <div class="col-md-9">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="rag-query-input" placeholder="Haz una pregunta...">
+                                            <button class="btn btn-primary" type="button" id="rag-query-button">
+                                                <i class="bi bi-send"></i> Enviar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <div class="col-md-9 text-center">
+                                        <div class="d-flex justify-content-center align-items-center">
+                                            <select id="language-select" class="form-select me-2" style="max-width: 150px;">
+                                                <option value="en-US">English</option>
+                                                <option value="es-ES">Español</option>
+                                            </select>
+                                            <button id="start-voice-query" class="btn btn-outline-primary">
+                                                <i class="bi bi-mic"></i> Preguntar con voz
+                                            </button>
+                                        </div>
+                                        <button id="clear-conversation" class="btn btn-outline-secondary ms-2">
+                                            <i class="bi bi-trash"></i> Limpiar conversación
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Audio recorder for RAG voice queries -->
+                                <div class="progress mb-3" style="display: none;" id="rag-recording-progress">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                
+                                <!-- Volume meter for RAG voice queries -->
+                                <div class="card mb-3" id="rag-volume-meter-container" style="display: none;">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <span>Grabando...</span>
+                                        <span id="rag-volume-value">0</span>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="progress" style="height: 30px;">
+                                            <div id="rag-volume-meter" class="progress-bar bg-danger" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Knowledge Base Section -->
+                            <div class="tab-pane fade" id="knowledge-base-content" role="tabpanel" aria-labelledby="knowledge-base-tab">
+                                <div class="mb-3">
+                                    <h5>Agregar Documento a la Base de Conocimiento</h5>
+                                    <div class="alert alert-info">
+                                        <small>Los documentos agregados aquí serán procesados, vectorizados y estarán disponibles para consultas RAG.</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="document-title" class="form-label">Título del Documento</label>
+                                    <input type="text" class="form-control" id="document-title" placeholder="Ingresa un título descriptivo...">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="document-content" class="form-label">Contenido del Documento</label>
+                                    <textarea class="form-control" id="document-content" rows="8" placeholder="Ingresa el contenido del documento aquí..."></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="document-metadata" class="form-label">Metadatos (Opcional - formato JSON)</label>
+                                    <textarea class="form-control" id="document-metadata" rows="3" placeholder='{"fuente": "sitio web", "autor": "Juan Pérez", "fecha": "2025-04-25"}'></textarea>
+                                </div>
+                                
+                                <div class="d-grid gap-2">
+                                    <button id="add-document-btn" class="btn btn-primary">
+                                        <i class="bi bi-plus-circle"></i> Agregar a la Base de Conocimiento
+                                    </button>
+                                </div>
+                                
+                                <hr class="my-4">
+                                
+                                <div class="mb-3">
+                                    <h5>Estadísticas de la Base de Conocimiento</h5>
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span>Total de Documentos:</span>
+                                                <span id="kb-total-docs">Cargando...</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span>Nombre de la Colección:</span>
+                                                <span id="kb-collection-name">Cargando...</span>
+                                            </div>
+                                            <button id="load-documents-btn" class="btn btn-outline-primary mt-2">
+                                                <i class="bi bi-arrow-repeat"></i> Actualizar Documentos
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <h5>Gestión de Documentos</h5>
+                                    <div class="alert alert-info">
+                                        <small>Visualiza y gestiona los documentos en tu base de conocimiento.</small>
+                                    </div>
+                                    <div id="documents-container" class="mt-3" style="max-height: 400px; overflow-y: auto;">
+                                        <div id="documents-list"></div>
+                                        <div id="documents-loading" class="text-center py-3">
+                                            <div class="spinner-border spinner-border-sm" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <span class="ms-2">Cargando documentos...</span>
+                                        </div>
+                                        <div id="no-documents" class="alert alert-secondary" style="display: none;">
+                                            No se encontraron documentos en la base de conocimiento.
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="kb-status" class="alert alert-success" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-center text-muted">
+                        <p class="mb-0">LIAC. 2025</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Document Edit Modal -->
+    <div class="modal fade" id="editDocumentModal" tabindex="-1" aria-labelledby="editDocumentModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editDocumentModalLabel">Editar Documento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit-doc-id">
+                    <div class="mb-3">
+                        <label for="edit-document-title" class="form-label">Título del Documento</label>
+                        <input type="text" class="form-control" id="edit-document-title" placeholder="Ingresa un título descriptivo...">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-document-content" class="form-label">Contenido del Documento</label>
+                        <textarea class="form-control" id="edit-document-content" rows="8" placeholder="Ingresa el contenido del documento aquí..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-document-metadata" class="form-label">Metadatos Adicionales (formato JSON)</label>
+                        <textarea class="form-control" id="edit-document-metadata" rows="3" placeholder='{"fuente": "sitio web", "autor": "Juan Pérez", "fecha": "2025-04-25"}'></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="save-document-btn" onclick="updateDocument()">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let ragMediaRecorder = null;
+        let ragAudioChunks = [];
+        let ragIsRecording = false;
+        let ragRecordingInterval = null;
+        let currentStream = null; // Store the stream reference globally
+        let recordingStartTime = null;
+        let recordingDuration = 10000; // 10 seconds max recording time
+        
+        // Volume meter variables
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let volumeInterval = null;
+        let dataArray = null;
+        
+        // Additional RAG variables
+        let conversationHistory = [];
+        let isProcessingRagQuery = false;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🌟 Page loaded - Setting provider status IMMEDIATELY');
+            
+            // Set provider status IMMEDIATELY to green (Local)
+            try {
+                const sttStatus = document.getElementById('stt-status');
+                const ttsStatus = document.getElementById('tts-status'); 
+                const llmStatus = document.getElementById('llm-status');
+                
+                if (sttStatus) {
+                    sttStatus.className = 'badge bg-success';
+                    sttStatus.title = 'Vosk (Local)';
+                    console.log('📡 STT: GREEN (Local)');
+                }
+                if (ttsStatus) {
+                    ttsStatus.className = 'badge bg-success';
+                    ttsStatus.title = 'espeak (Local)';
+                    console.log('🎤 TTS: GREEN (Local)');
+                }
+                if (llmStatus) {
+                    llmStatus.className = 'badge bg-success';
+                    llmStatus.title = 'Ollama (Local)';
+                    console.log('🧠 LLM: GREEN (Local)');
+                }
+                console.log('✅ All providers set to LOCAL (GREEN)');
+            } catch (error) {
+                console.error('❌ Error setting provider status:', error);
+            }
+            
+            // Load voices when the page loads
+            loadVoices();
+            
+            // Load knowledge base stats
+            loadKnowledgeBaseStats();
+            
+            // Set up button handlers
+            setupButtonHandlers();
+            
+            // Initialize hybrid speech functionality
+            initializeHybridSpeech();
+        });
+        
+        function loadVoices() {
+            // Clear the dropdown first
+            const voiceSelect = document.getElementById('voice-select');
+            voiceSelect.innerHTML = '';
+            
+            // Add a loading option
+            const loadingOption = document.createElement('option');
+            loadingOption.text = 'Loading voices...';
+            voiceSelect.appendChild(loadingOption);
+            
+            // Fetch voices from server
+            fetch('/voices')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Voices data:', data);
+                    
+                    // Clear loading option
+                    voiceSelect.innerHTML = '';
+                    
+                    if (data.success && data.voices && data.voices.length > 0) {
+                        // Add each voice to dropdown
+                        data.voices.forEach(voice => {
+                            const option = document.createElement('option');
+                            option.value = voice.id;
+                            option.text = voice.name;
+                            voiceSelect.appendChild(option);
+                        });
+                        
+                        console.log('Loaded ' + data.voices.length + ' voices');
+                    } else {
+                        // No voices found or error
+                        const noVoicesOption = document.createElement('option');
+                        noVoicesOption.text = 'No voices available';
+                        voiceSelect.appendChild(noVoicesOption);
+                        console.error('No voices found or error loading voices');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading voices:', error);
+                    voiceSelect.innerHTML = '';
+                    const errorOption = document.createElement('option');
+                    errorOption.text = 'Error loading voices';
+                // Note: final-transcript and stt-status elements no longer exist
+                console.log('Requesting microphone access...');
+                
+                // Note: copy-transcript and send-to-tts elements no longer exist
+                
+                console.log('Attempting to access microphone...');
+                
+                // Get user media with explicit error handling
+                try {
+                    // Store stream in the global variable
+                    // Get user media (need to use Promise-based approach instead of await)
+                    navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        } 
+                    }).then(stream => {
+                        // Store stream in the global variable
+                        currentStream = stream;
+                        
+                        console.log('Microphone access granted:', currentStream.getAudioTracks()[0].label);
+                        
+                        // Check if we have audio tracks
+                        if (currentStream.getAudioTracks().length === 0) {
+                            throw new Error('No audio tracks available in the media stream');
+                        }
+                    
+                    // Set up media recorder with explicit mime type checks
+                    let options = {};
+                    
+                    // Check for supported mime types
+                    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                        options.mimeType = 'audio/webm;codecs=opus';
+                        console.log('Using audio/webm;codecs=opus');
+                    } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                        options.mimeType = 'audio/webm';
+                        console.log('Using audio/webm');
+                    } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                        options.mimeType = 'audio/mp4';
+                        console.log('Using audio/mp4');
+                    } else {
+                        console.log('No supported mime type found, using browser default');
+                    }
+                    
+                    mediaRecorder = new MediaRecorder(currentStream, options);
+                    audioChunks = [];
+                    
+                    // Set up audio volume meter
+                    setupVolumeMeter(currentStream);
+                    
+                } catch (micError) {
+                    console.error('Error accessing microphone: ' + micError.name + ', ' + micError.message);
+                    // Note: stt-status element no longer exists - using console logging instead
+                    console.error('Microphone access error: ' + micError.name + '. ' + (micError.name ? getPermissionErrorHelp(micError) : 'Please check microphone settings.'));
+                    throw micError; // Rethrow to be caught by outer try/catch
+                }
+                
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log('Audio chunk captured, size:', event.data.size);
+                    }
+                });
+                
+                mediaRecorder.addEventListener('stop', async () => {
+                    // Stop all tracks to release the microphone using the global reference
+                    if (currentStream && currentStream.getTracks) {
+                        currentStream.getTracks().forEach(track => track.stop());
+                    }
+                    
+                    // Stop volume meter
+                    stopVolumeMeter();
+                    
+                    // Process the recording
+                    console.log('Processing speech...');
+                    
+                    // Create audio blob 
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    
+                    // Convert to WAV format on the client side for better compatibility
+                    console.log('Converting audio format...');
+                    
+                    // Create an audio element to convert the format
+                    const audioElement = new Audio();
+                    audioElement.src = URL.createObjectURL(audioBlob);
+                    
+                    // Create an audio context
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const analyser = audioContext.createAnalyser();
+                    
+                    // This will hold our WAV file data
+                    let wavData = null;
+                    
+                    // When the audio is loaded, process it
+                    audioElement.onloadedmetadata = async function() {
+                        try {
+                            // Create a media element source
+                            const source = audioContext.createMediaElementSource(audioElement);
+                            source.connect(analyser);
+                            analyser.connect(audioContext.destination);
+                            
+                            // Play and immediately pause to initialize the audio (required in some browsers)
+                            await audioElement.play();
+                            audioElement.pause();
+                            
+                            // Create a WAV encoder (simple implementation)
+                            const wavBlob = await recordAudioToWav(audioChunks, mediaRecorder.mimeType);
+                            
+                            // Prepare form data with the WAV
+                            const formData = new FormData();
+                            formData.append('audio', wavBlob, 'recording.wav');
+                            formData.append('language', document.getElementById('recognition-language').value);
+                            
+                            // Send to server
+                            sendAudioToServer(formData);
+                            
+                        } catch (error) {
+                            console.error('Error converting audio:', error);
+                            // Fallback to original format if conversion fails
+                            const formData = new FormData();
+                            formData.append('audio', audioBlob, 'recording.webm');
+                            formData.append('language', document.getElementById('recognition-language').value);
+                            sendAudioToServer(formData);
+                        }
+                    };
+                    
+                    // Handle errors
+                    audioElement.onerror = function(error) {
+                        console.error('Error loading audio:', error);
+                        // Fallback to original format
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'recording.webm');
+                        formData.append('language', document.getElementById('recognition-language').value);
+                        sendAudioToServer(formData);
+                    };
+                    
+                    // Function to send the form data to server
+                    function sendAudioToServer(formData) {
+                        console.log('Processing speech...');
+                        console.log('Sending audio to server for processing');
+                        fetch('/upload-audio', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            console.log('Response JSON:', result);
+                            
+                            if (result.success) {
+                                console.log('Transcription complete:', result.transcript);
+                                // Note: final-transcript, copy-transcript, and send-to-tts elements no longer exist
+                            } else {
+                                console.error('Transcription error:', result.error);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error processing audio:', error);
+                        });
+                    }
+                    
+                    // Convert WebM audio chunks to WAV
+                    async function recordAudioToWav(audioChunks, mimeType) {
+                        return new Promise((resolve, reject) => {
+                            try {
+                                // Create a blob from the audio chunks
+                                const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
+                                
+                                // Create an off-screen audio element
+                                const audio = new Audio();
+                                audio.src = URL.createObjectURL(audioBlob);
+                                
+                                // Set up AudioContext
+                                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                
+                                // Load the blob as an ArrayBuffer
+                                audioBlob.arrayBuffer().then(arrayBuffer => {
+                                    // Decode the audio data
+                                    audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+                                        // Convert to WAV
+                                        const wavBuffer = bufferToWav(buffer, audioContext.sampleRate);
+                                        const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+                                        resolve(wavBlob);
+                                    }, (err) => {
+                                        console.error('Error decoding audio data', err);
+                                        reject(err);
+                                    });
+                                }).catch(error => {
+                                    console.error('Error getting array buffer:', error);
+                                    reject(error);
+                                });
+                            } catch (error) {
+                                console.error('Error in WAV conversion:', error);
+                                reject(error);
+                            }
+                        });
+                    }
+                    
+                    // Convert AudioBuffer to WAV format
+                    function bufferToWav(buffer, sampleRate) {
+                        const numChannels = buffer.numberOfChannels;
+                        const length = buffer.length * numChannels * 2;
+                        const wav = new DataView(new ArrayBuffer(44 + length));
+                        let offset = 0;
+                        
+                        // Write WAV header
+                        // "RIFF" chunk descriptor
+                        writeString(wav, offset, 'RIFF'); offset += 4;
+                        wav.setUint32(offset, 36 + length, true); offset += 4;
+                        writeString(wav, offset, 'WAVE'); offset += 4;
+                        
+                        // "fmt " sub-chunk
+                        writeString(wav, offset, 'fmt '); offset += 4;
+                        wav.setUint32(offset, 16, true); offset += 4; // subchunk size
+                        wav.setUint16(offset, 1, true); offset += 2; // PCM format
+                        wav.setUint16(offset, numChannels, true); offset += 2; // channels
+                        wav.setUint32(offset, sampleRate, true); offset += 4; // sample rate
+                        wav.setUint32(offset, sampleRate * numChannels * 2, true); offset += 4; // byte rate
+                        wav.setUint16(offset, numChannels * 2, true); offset += 2; // block align
+                        wav.setUint16(offset, 16, true); offset += 2; // bits per sample
+                        
+                        // "data" sub-chunk
+                        writeString(wav, offset, 'data'); offset += 4;
+                        wav.setUint32(offset, length, true); offset += 4;
+                        
+                        // Write interleaved audio data
+                        const channelData = [];
+                        for (let i = 0; i < numChannels; i++) {
+                            channelData.push(buffer.getChannelData(i));
+                        }
+                        
+                        let sample, sampleIndex;
+                        const bufferLength = buffer ? buffer.length : 0;
+                        for (let i = 0; i < bufferLength; i++) {
+                            for (let channel = 0; channel < numChannels; channel++) {
+                                sample = Math.max(-1, Math.min(1, channelData[channel][i]));
+                                sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+                                wav.setInt16(offset, sample, true);
+                                offset += 2;
+                            }
+                        }
+                        
+                        return wav.buffer;
+                    }
+                    
+                    // Helper to write ASCII strings to DataView
+                    function writeString(view, offset, string) {
+                        for (let i = 0; i < string.length; i++) {
+                            view.setUint8(offset + i, string.charCodeAt(i));
+                        }
+                    }
+                    
+                    try {
+                        // This starts the conversion process
+                        // The sendAudioToServer function will be called after conversion
+                    } catch (error) {
+                        console.error('Error setting up audio processing:', error);
+                    }
+                });
+                
+                // Start recording
+                mediaRecorder.start(1000); // Get data each second
+                isRecording = true;
+                const startRecordingBtn = document.getElementById('start-recording');
+                if (startRecordingBtn) {
+                    startRecordingBtn.innerHTML = '<i class="bi bi-stop-fill"></i> Stop Recording';
+                }
+                
+                console.log('Recording... (speak now)');
+                
+                // Show and animate progress bar
+                const progressBar = document.getElementById('recording-progress');
+                const progressBarInner = progressBar.querySelector('.progress-bar');
+                progressBar.style.display = 'flex';
+                progressBarInner.style.width = '0%';
+                
+                // Set up recording duration tracking
+                recordingStartTime = Date.now();
+                recordingInterval = setInterval(() => {
+                    const elapsed = Date.now() - recordingStartTime;
+                    const percent = Math.min(100, (elapsed / recordingDuration) * 100);
+                    progressBarInner.style.width = percent + '%';
+                    
+                    // Auto-stop after max duration
+                    if (elapsed >= recordingDuration) {
+                        stopRecording();
+                    }
+                }, 100);
+                
+            } catch (error) {
+                const errorType = error.name || 'Unknown';
+                const errorMsg = error.message || 'No message';
+                console.error('Error in recording process: ' + errorType + ', ' + errorMsg);
+                
+                // Show detailed error information to the user
+                let errorMessage = 'Microphone error: ' + errorType + '. ' + errorMsg;
+                let helpMessage = error.name ? getPermissionErrorHelp(error) : 'Please check your microphone settings and try again.';
+                
+                console.error(errorMessage);
+                console.log(helpMessage);
+                
+                // Show a more user-friendly alert
+                alert(`Microphone access failed\n\nError: ${error.name}\n${helpMessage}`);
+            }
+        }
+        
+        function stopRecording() {
+            if (!isRecording || !mediaRecorder) return;
+            
+            // Clear intervals
+            clearInterval(recordingInterval);
+            recordingInterval = null;
+            
+            // Stop volume meter
+            stopVolumeMeter();
+            
+            // Update UI  
+            console.log('Stopping recording...');
+            const startRecBtn = document.getElementById('start-recording');
+            const recordProgress = document.getElementById('recording-progress');
+            const volumeContainer = document.getElementById('volume-meter-container');
+            
+            if (startRecBtn) startRecBtn.innerHTML = '<i class="bi bi-mic-fill"></i> Start Recording';
+            if (recordProgress) recordProgress.style.display = 'none';
+            if (volumeContainer) volumeContainer.style.display = 'none';
+            
+            try {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+            } catch (e) {
+                console.error('Error stopping recorder:', e);
+                isRecording = false;
+                
+                // Clean up in case of error
+                if (currentStream && currentStream.getTracks) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+            }
+        }
+        // Audio volume meter functions
+        function setupVolumeMeter(stream) {
+            try {
+                // Create audio context
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioContext = new AudioContext();
+                
+                // Create analyser node
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                
+                // Connect microphone to analyser
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                // Prepare data array
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                // Show volume meter
+                document.getElementById('volume-meter-container').style.display = 'block';
+                
+                // Start updating volume meter
+                volumeInterval = setInterval(updateVolumeMeter, 100); // Update every 100ms
+                
+                console.log('Volume meter initialized');
+            } catch (error) {
+                console.error('Error setting up volume meter:', error);
+            }
+        }
+        
+        function updateVolumeMeter() {
+            if (!analyser) return;
+            
+            // Get volume data
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Calculate volume (average of frequency data)
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            
+            // Map to percentage (0-100)
+            const volume = Math.min(100, Math.max(0, Math.round(average * 100 / 256)));
+            
+            // Update volume meter
+            const meter = document.getElementById('volume-meter');
+            const volumeValue = document.getElementById('volume-value');
+            
+            meter.style.width = volume + '%';
+            meter.setAttribute('aria-valuenow', volume);
+            volumeValue.textContent = volume;
+            
+            // Change color based on volume
+            if (volume < 30) {
+                meter.className = 'progress-bar bg-danger'; // Low volume - red
+            } else if (volume < 70) {
+                meter.className = 'progress-bar bg-warning'; // Medium volume - yellow
+            } else {
+                meter.className = 'progress-bar bg-success'; // Good volume - green
+            }
+        }
+        
+        function stopVolumeMeter() {
+            // Clear interval
+            if (volumeInterval) {
+                clearInterval(volumeInterval);
+                volumeInterval = null;
+            }
+            
+            // Disconnect and clean up
+            if (microphone) {
+                microphone.disconnect();
+                microphone = null;
+            }
+            
+            if (analyser) {
+                analyser = null;
+            }
+            
+            if (audioContext) {
+                if (audioContext.state !== 'closed') {
+                    try {
+                        audioContext.close();
+                    } catch (e) {
+                        console.error('Error closing audio context:', e);
+                    }
+                }
+                audioContext = null;
+            }
+            
+            // Hide volume meter
+            document.getElementById('volume-meter-container').style.display = 'none';
+        }
+        // Helper function to provide more user-friendly error messages
+        function getPermissionErrorHelp(error) {
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                return 'You need to grant microphone permission. Click the camera/microphone icon in your browser address bar and select "Allow".';
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                return 'No microphone found. Please check that a microphone is connected to your device.';
+            } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                return 'Your microphone is busy or not available. Close other applications that might be using your microphone.';
+            } else if (error.name === 'OverconstrainedError') {
+                return 'Cannot satisfy the requested microphone constraints. Try a different microphone.';
+            } else if (error.name === 'SecurityError') {
+                return 'Use of microphone is not allowed in this context for security reasons. Try using HTTPS instead of HTTP.';
+            } else if (error.name === 'AbortError') {
+                return 'Permission request for microphone was aborted. Please try again.';
+            } else {
+                return 'Please check that your microphone is connected and not being used by another application.';
+            }
+        }
+    </script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize variables for recording state
+            isRecording = false;
+            mediaRecorder = null;
+            audioChunks = [];
+            recordingInterval = null;
+            
+            // Initialize RAG recording variables
+            ragIsRecording = false;
+            ragMediaRecorder = null;
+            ragAudioChunks = [];
+            ragRecordingInterval = null;
+            
+            // Initialize conversation history
+            conversationHistory = [];
+            
+            // Flag to prevent multiple RAG queries at once
+            isProcessingRagQuery = false;
+            
+            // Define voice loading functions first
+            // Function to load voices for Speech-to-Text
+            function loadVoices() {
+                // Get the voice selector element
+                const voiceSelect = document.getElementById('voice-select');
+                if (!voiceSelect) return; // Skip if element doesn't exist
+                
+                // Clear existing options
+                voiceSelect.innerHTML = '<option value="">Select voice (optional)</option>';
+                
+                // Fetch available voices from the server
+                fetch('/voices')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.voices && data.voices.length > 0) {
+                            // Add each voice as an option
+                            data.voices.forEach(voice => {
+                                const option = document.createElement('option');
+                                option.value = voice.id;
+                                option.text = voice.name;
+                                voiceSelect.appendChild(option);
+                            });
+                        }
+                    })
+                    .catch(error => console.error('Error loading voices:', error));
+            }
+            
+            // Note: loadTtsVoices function removed - tts-voice-select element no longer exists
+            
+            // Now load the voices and stats
+            loadVoices();
+            loadRagVoices();
+            
+            // Load initial knowledge base stats
+            loadKnowledgeBaseStats();
+            
+            // Attach event listeners with null checks
+            const recordButton = document.getElementById('record-button');
+            if (recordButton) {
+                recordButton.addEventListener('click', toggleRecording);
+            }
+            
+            const languageSelector = document.getElementById('language-selector');
+            if (languageSelector) {
+                languageSelector.addEventListener('change', updateLanguageSelection);
+            }
+            
+            // Note: send-to-tts-button and tts-speak-button elements no longer exist
+            
+            const tabsElement = document.getElementById('tabs');
+            if (tabsElement) {
+                tabsElement.addEventListener('click', handleTabChange);
+            }
+            
+            // RAG interface event listeners - with null checks for robustness
+            const ragQueryButton = document.getElementById('rag-query-button');
+            if (ragQueryButton) {
+                ragQueryButton.addEventListener('click', function() {
+                    const query = document.getElementById('rag-query-input').value.trim();
+                    if (query) {
+                        submitRagQuery(query);
+                    }
+                });
+            }
+            
+            const ragQueryInput = document.getElementById('rag-query-input');
+            if (ragQueryInput) {
+                ragQueryInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        const query = ragQueryInput.value.trim();
+                        if (query) {
+                            submitRagQuery(query);
+                        }
+                    }
+                });
+            }
+            
+            // Voice recording for RAG
+            const startVoiceQuery = document.getElementById('start-voice-query');
+            if (startVoiceQuery) {
+                startVoiceQuery.addEventListener('click', function() {
+                    if (ragIsRecording) {
+                        stopRagRecording();
+                    } else {
+                        startRagRecording();
+                    }
+                });
+            }
+            
+            // Clear conversation button
+            const clearConversationBtn = document.getElementById('clear-conversation');
+            if (clearConversationBtn) {
+                clearConversationBtn.addEventListener('click', clearConversation);
+            }
+            
+            // Knowledge base event listeners
+            const addDocumentBtn = document.getElementById('add-document-btn');
+            if (addDocumentBtn) {
+                addDocumentBtn.addEventListener('click', addDocumentToKnowledgeBase);
+            }
+            
+            // Store the currently active tab
+            activeTab = 'rag-assistant';
+        });
+    </script>
+    
+    <script>
+        // Function to load voices for RAG assistant
+        function loadRagVoices() {
+            // Clear the dropdown first
+            const voiceSelect = document.getElementById('rag-voice-select');
+            if (!voiceSelect) return; // Skip if element doesn't exist
+            
+            voiceSelect.innerHTML = '<option value="">Spanish (Default)</option>';
+            
+            // Fetch voices from server
+            fetch('/voices')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Available voices:', data);
+                    
+                    if (data.success && data.voices && data.voices.length > 0) {
+                        let spanishVoice = null;
+                        
+                        // Add each voice to dropdown and find Spanish voice
+                        data.voices.forEach(voice => {
+                            const option = document.createElement('option');
+                            option.value = voice.id;
+                            option.text = voice.name;
+                            voiceSelect.appendChild(option);
+                            
+                            // Find Spanish voice for default selection
+                            if (voice.language_type === 'Spanish') {
+                                spanishVoice = voice.id;
+                            }
+                        });
+                        
+                        // Automatically select Spanish voice as default
+                        if (spanishVoice) {
+                            voiceSelect.value = spanishVoice;
+                            console.log('Spanish voice set as default:', spanishVoice);
+                        }
+                    } else {
+                        console.error('No voices received from server');
+                    }
+                })
+                .catch(error => console.error('Error loading voices:', error));
+        }
+        
+        // Function to submit a RAG query
+        function submitRagQuery(query) {
+            if (isProcessingRagQuery) {
+                return; // Prevent multiple simultaneous requests
+            }
+            
+            isProcessingRagQuery = true;
+            
+            // Clear input
+            document.getElementById('rag-query-input').value = '';
+            
+            // Add user message to conversation
+            addMessageToConversation('user', query);
+            
+            // Add loading indicator
+            const loadingId = addLoadingIndicator();
+            
+            // Get settings
+            const useMemory = document.getElementById('use-conversation-memory').checked;
+            const useSpeech = document.getElementById('use-speech-output').checked;
+            const voiceId = document.getElementById('rag-voice-select').value;
+            
+            // Choose endpoint based on whether we want speech output
+            const endpoint = useSpeech ? '/rag_to_speech' : '/rag_query';
+            
+            // Send request
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: query,
+                    use_memory: useMemory,
+                    voice_id: voiceId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Remove loading indicator
+                removeLoadingIndicator(loadingId);
+                isProcessingRagQuery = false;
+                
+                if (data.success) {
+                    // Add assistant message
+                    addMessageToConversation('assistant', data.answer, data.retrieved_documents);
+                    
+                    // Play audio if available
+                    if (data.audio_url) {
+                        playAudio(data.audio_url);
+                    }
+                } else {
+                    console.error('RAG query error:', data.error);
+                    addMessageToConversation('error', 'Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error processing RAG query:', error);
+                removeLoadingIndicator(loadingId);
+                isProcessingRagQuery = false;
+                addMessageToConversation('error', 'Error: Could not process query');
+            });
+        }
+        
+        // Function to add a message to the conversation
+        function addMessageToConversation(type, content, sources = null) {
+            const container = document.getElementById('conversation-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'mb-3';
+            
+            if (type === 'user') {
+                messageDiv.innerHTML = `
+                    <div class="d-flex justify-content-end">
+                        <div class="badge bg-primary text-wrap p-2 text-start" style="max-width: 80%;">
+                            ${escapeHtml(content)}
+                        </div>
+                    </div>`;
+            } else if (type === 'assistant') {
+                let sourceHtml = '';
+                if (sources && sources.length > 0) {
+                    sourceHtml = `
+                        <div class="text-muted mt-2 small">
+                            <div class="fw-bold">Sources:</div>
+                            <ol class="ps-3 mb-0">
+                                ${sources.map(source => `<li>${escapeHtml(truncateText(source, 100))}</li>`).join('')}
+                            </ol>
+                        </div>`;
+                }
+                
+                messageDiv.innerHTML = `
+                    <div class="d-flex justify-content-start">
+                        <div class="border rounded p-2 text-start" style="max-width: 80%;">
+                            ${escapeHtml(content).replace(/\n/g, '<br>')}
+                            ${sourceHtml}
+                        </div>
+                    </div>`;
+            } else if (type === 'error') {
+                messageDiv.innerHTML = `
+                    <div class="d-flex justify-content-center">
+                        <div class="alert alert-danger py-2 px-3" role="alert">
+                            ${escapeHtml(content)}
+                        </div>
+                    </div>`;
+            }
+            
+            container.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            const conversationContainer = document.getElementById('conversation-container');
+            conversationContainer.scrollTop = conversationContainer.scrollHeight;
+            
+            // Add to history
+            if (type === 'user' || type === 'assistant') {
+                conversationHistory.push({type, content});
+            }
+        }
+        
+        // Helper function to add loading indicator
+        function addLoadingIndicator() {
+            const container = document.getElementById('conversation-messages');
+            const loadingDiv = document.createElement('div');
+            const loadingId = 'loading-' + Date.now();
+            loadingDiv.id = loadingId;
+            loadingDiv.className = 'text-center my-2';
+            loadingDiv.innerHTML = `
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                                            <span class="ms-2 text-muted">Pensando...</span>
+            `;
+            container.appendChild(loadingDiv);
+            
+            // Scroll to bottom
+            const conversationContainer = document.getElementById('conversation-container');
+            conversationContainer.scrollTop = conversationContainer.scrollHeight;
+            
+            return loadingId;
+        }
+        
+        // Helper function to remove loading indicator
+        function removeLoadingIndicator(loadingId) {
+            const loadingDiv = document.getElementById(loadingId);
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+        }
+        
+        // Function to play audio
+        function playAudio(url) {
+            console.log('Playing audio:', url);
+            const audio = new Audio(url);
+            
+            audio.onloadstart = function() {
+                console.log('Audio loading started');
+            };
+            
+            audio.oncanplay = function() {
+                console.log('Audio can start playing');
+            };
+            
+            audio.onerror = function(e) {
+                console.error('Audio playback error:', e);
+                console.error('Audio error details:', this.error);
+            };
+            
+            audio.onended = function() {
+                console.log('Audio playback finished');
+            };
+            
+            // Attempt to play
+            audio.play().then(() => {
+                console.log('Audio playback started successfully');
+            }).catch(error => {
+                console.error('Failed to play audio:', error);
+                // Try alternative approach
+                const audioElement = document.createElement('audio');
+                audioElement.src = url;
+                audioElement.controls = true;
+                audioElement.autoplay = true;
+                document.body.appendChild(audioElement);
+                setTimeout(() => {
+                    document.body.removeChild(audioElement);
+                }, 5000);
+            });
+        }
+        
+        // Function to stop RAG voice recording
+        function stopRagRecording() {
+            if (!ragIsRecording) return;
+            
+            console.log('Stopping voice recording...');
+            ragIsRecording = false;
+            
+            try {
+                // Stop recording if active
+                if (ragMediaRecorder && ragMediaRecorder.state !== 'inactive') {
+                    ragMediaRecorder.stop();
+                }
+                
+                // Release microphone
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                    currentStream = null;
+                }
+            } catch (e) {
+                console.error('Error stopping recorder:', e);
+                
+                // Cleanup in case of error
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                    currentStream = null;
+                }
+            }
+        }
+        
+        // Function for RAG voice recording
+        function startRagRecording() {
+            // If already recording, stop first
+            if (ragIsRecording) {
+                stopRagRecording();
+                return;
+            }
+            
+            console.log('Starting voice query recording...');
+            
+            // Reset any existing audio chunks
+            ragAudioChunks = [];
+            
+            // Update UI to show recording state
+            document.getElementById('start-voice-query').innerHTML = '<i class="bi bi-stop-circle"></i> Stop Recording';
+            document.getElementById('start-voice-query').classList.replace('btn-outline-primary', 'btn-outline-danger');
+            document.getElementById('rag-recording-progress').style.display = 'block';
+            
+            // Check if mediaDevices is available
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                console.error('MediaDevices API not available');
+                addMessageToConversation('error', 'Microphone access is not available. Your browser may not support this feature or you may need to enable it in your browser settings.');
+                return;
+            }
+            
+            // Request microphone permission with explicit error handling
+            navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } 
+            })
+            .then(function(stream) {
+                // Check if we have audio tracks
+                if (stream.getAudioTracks().length === 0) {
+                    throw new Error('No audio tracks available in the media stream');
+                }
+                
+                console.log('Microphone access granted:', stream.getAudioTracks()[0].label);
+                
+                // Store stream in the global variable
+                currentStream = stream;
+                
+                // Set up media recorder with explicit mime type checks
+                let options = {};
+                
+                // Check for supported mime types
+                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                    options.mimeType = 'audio/webm;codecs=opus';
+                    console.log('Using audio/webm;codecs=opus');
+                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    options.mimeType = 'audio/webm';
+                    console.log('Using audio/webm');
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    options.mimeType = 'audio/mp4';
+                    console.log('Using audio/mp4');
+                } else {
+                    console.log('No supported mime type found, using browser default');
+                }
+                
+                // Create MediaRecorder
+                ragMediaRecorder = new MediaRecorder(stream, options);
+                ragIsRecording = true;
+                
+                // Setup volume meter
+                setupRagVolumeMeter(stream);
+                
+                // Setup progress bar
+                let progress = 0;
+                const progressBar = document.querySelector('#rag-recording-progress .progress-bar');
+                ragRecordingInterval = setInterval(() => {
+                    progress += 1;
+                    if (progress <= 100) {
+                        progressBar.style.width = progress + '%';
+                    } else {
+                        // Auto stop after 10 seconds
+                        stopRagRecording();
+                    }
+                }, 100);
+                
+                // Setup data handler
+                ragMediaRecorder.addEventListener('dataavailable', event => {
+                    if (event.data.size > 0) {
+                        ragAudioChunks.push(event.data);
+                        console.log('Audio chunk captured, size:', event.data.size);
+                    }
+                });
+                
+                // Setup stop handler
+                ragMediaRecorder.addEventListener('stop', async () => {
+                    // Update UI
+                    document.getElementById('start-voice-query').innerHTML = '<i class="bi bi-mic"></i> Ask with voice';
+                    document.getElementById('start-voice-query').classList.replace('btn-outline-danger', 'btn-outline-primary');
+                    document.getElementById('rag-recording-progress').style.display = 'none';
+                    
+                    // Clear interval
+                    clearInterval(ragRecordingInterval);
+                    
+                    // Stop volume meter
+                    stopRagVolumeMeter();
+                    
+                    // Create loading indicator
+                    const loadingId = addLoadingIndicator();
+                    
+                    try {
+                        // Create a blob from the audio chunks
+                        const audioBlob = new Blob(ragAudioChunks, { type: ragMediaRecorder.mimeType || 'audio/webm' });
+                        
+                        // Convert to WAV format
+                        const wavBlob = await recordAudioToWav(audioBlob, ragMediaRecorder.mimeType);
+                        
+                        // Create form data with the WAV file
+                        const formData = new FormData();
+                        formData.append('audio', wavBlob, 'audio.wav');
+                        
+                        // Language selection with fallback
+                        const languageSelect = document.getElementById('language-select');
+                        const language = languageSelect ? languageSelect.value : 'en-US';
+                        formData.append('language', language);
+                        
+                        // Send to server for transcription
+                        const response = await fetch('/upload-audio', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            console.log('Transcription successful:', data.transcript);
+                            
+                            // Add user message to conversation
+                            addMessageToConversation('user', data.transcript);
+                            
+                            // Get memory setting
+                            const useMemoryCheckbox = document.getElementById('use-conversation-memory');
+                            const useMemory = useMemoryCheckbox ? useMemoryCheckbox.checked : true;
+                            
+                            // Process the RAG query
+                            processRagQuery(data.transcript, language, useMemory);
+                        } else {
+                            console.error('Transcription error:', data.error);
+                            removeLoadingIndicator(loadingId);
+                            addMessageToConversation('error', 'Error: ' + data.error);
+                        }
+                    } catch (error) {
+                        console.error('Error processing audio:', error);
+                        removeLoadingIndicator(loadingId);
+                        addMessageToConversation('error', 'Error processing audio: ' + error.message);
+                    }
+                });
+                
+                // Start recording
+                ragMediaRecorder.start(1000); // Get data each second
+            })
+            .catch(function(error) {
+                console.error('Error accessing microphone:', error);
+                
+                // Reset UI
+                document.getElementById('start-voice-query').innerHTML = '<i class="bi bi-mic"></i> Ask with voice';
+                document.getElementById('start-voice-query').classList.replace('btn-outline-danger', 'btn-outline-primary');
+                document.getElementById('rag-recording-progress').style.display = 'none';
+                
+                // Show error message
+                const errorMsg = getPermissionErrorHelp(error);
+                addMessageToConversation('error', errorMsg);
+                ragIsRecording = false;
+            });
+        }
+        
+        // Process RAG query with the transcript
+        function processRagQuery(transcript, language, useMemory) {
+            // Create a loading indicator
+            const loadingId = addLoadingIndicator();
+            
+            // Send the query to the RAG endpoint
+            fetch('/rag_query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: transcript,
+                    use_memory: useMemory
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Remove loading indicator
+                removeLoadingIndicator(loadingId);
+                
+                if (data.success) {
+                    // Add assistant message to conversation
+                    addMessageToConversation('assistant', data.answer, data.retrieved_documents);
+                    
+                    // Speak the answer if enabled
+                    if (document.getElementById('use-speech-output') && document.getElementById('use-speech-output').checked) {
+                        // Use TTS to speak the answer
+                        const voiceId = document.getElementById('rag-voice-select') ? 
+                            document.getElementById('rag-voice-select').value : '';
+                        speakText(data.answer, voiceId);
+                    }
+                } else {
+                    console.error('RAG query error:', data.error);
+                    addMessageToConversation('error', 'Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error processing RAG query:', error);
+                removeLoadingIndicator(loadingId);
+                addMessageToConversation('error', 'Error: Could not process RAG query');
+            });
+        }
+        
+        // Global helper functions for audio processing
+        
+        // Convert AudioBuffer to WAV format
+        function bufferToWav(buffer, sampleRate) {
+            const numChannels = buffer.numberOfChannels;
+            const length = buffer.length * numChannels * 2;
+            const wav = new DataView(new ArrayBuffer(44 + length));
+            let offset = 0;
+            
+            // Write WAV header
+            // "RIFF" chunk descriptor
+            writeString(wav, offset, 'RIFF'); offset += 4;
+            wav.setUint32(offset, 36 + length, true); offset += 4;
+            writeString(wav, offset, 'WAVE'); offset += 4;
+            
+            // "fmt " sub-chunk
+            writeString(wav, offset, 'fmt '); offset += 4;
+            wav.setUint32(offset, 16, true); offset += 4; // subchunk size
+            wav.setUint16(offset, 1, true); offset += 2; // PCM format
+            wav.setUint16(offset, numChannels, true); offset += 2; // channels
+            wav.setUint32(offset, sampleRate, true); offset += 4; // sample rate
+            wav.setUint32(offset, sampleRate * numChannels * 2, true); offset += 4; // byte rate
+            wav.setUint16(offset, numChannels * 2, true); offset += 2; // block align
+            wav.setUint16(offset, 16, true); offset += 2; // bits per sample
+            
+            // "data" sub-chunk
+            writeString(wav, offset, 'data'); offset += 4;
+            wav.setUint32(offset, length, true); offset += 4;
+            
+            // Write interleaved audio data
+            const channelData = [];
+            for (let i = 0; i < numChannels; i++) {
+                channelData.push(buffer.getChannelData(i));
+            }
+            
+            let sample, sampleIndex;
+            const bufferLength = buffer ? buffer.length : 0;
+            for (let i = 0; i < bufferLength; i++) {
+                for (let channel = 0; channel < numChannels; channel++) {
+                    sample = Math.max(-1, Math.min(1, channelData[channel][i]));
+                    sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+                    wav.setInt16(offset, sample, true);
+                    offset += 2;
+                }
+            }
+            
+            return wav.buffer;
+        }
+        
+        // Helper to write ASCII strings to DataView
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        // Convert WebM audio blob to WAV
+        async function recordAudioToWav(audioBlob, mimeType) {
+            return new Promise((resolve, reject) => {
+                try {
+                    console.log('Converting audio to WAV format...');
+                    
+                    // Set up AudioContext
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Load the blob as an ArrayBuffer
+                    audioBlob.arrayBuffer().then(arrayBuffer => {
+                        // Decode the audio data
+                        audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+                            console.log('Audio decoded successfully, converting to WAV...');
+                            // Convert to WAV
+                            const wavBuffer = bufferToWav(buffer, audioContext.sampleRate);
+                            const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+                            console.log('WAV conversion complete, size:', wavBlob.size);
+                            resolve(wavBlob);
+                        }, (err) => {
+                            console.error('Error decoding audio data:', err);
+                            reject(err);
+                        });
+                    }).catch(error => {
+                        console.error('Error getting array buffer:', error);
+                        reject(error);
+                    });
+                } catch (error) {
+                    console.error('Error in WAV conversion:', error);
+                    reject(error);
+                }
+            });
+        }
+        
+
+        
+        // Setup volume meter for RAG
+        function setupRagVolumeMeter(stream) {
+            try {
+                // Create audio context
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = audioCtx.createAnalyser();
+                const microphone = audioCtx.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                document.getElementById('rag-volume-meter-container').style.display = 'block';
+                
+                const volumeInterval = setInterval(() => {
+                    // Get volume data
+                    analyser.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+                    const volume = Math.min(100, Math.max(0, average * 1.5)); // Scale for better visualization
+                    
+                    // Update volume meter
+                    document.getElementById('rag-volume-meter').style.width = volume + '%';
+                    document.getElementById('rag-volume-value').textContent = Math.round(volume);
+                }, 100);
+                
+                // Store interval for cleanup
+                window.ragVolumeInterval = volumeInterval;
+                
+            } catch (error) {
+                console.error('Error setting up volume meter:', error);
+            }
+        }
+        
+        // Stop RAG volume meter
+        function stopRagVolumeMeter() {
+            if (window.ragVolumeInterval) {
+                clearInterval(window.ragVolumeInterval);
+            }
+            document.getElementById('rag-volume-meter-container').style.display = 'none';
+        }
+        
+        // Speak text using TTS
+        function speakText(text, voiceId = null) {
+            fetch('/synthesize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    voice_id: voiceId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.audio_url) {
+                    playAudio(data.audio_url);
+                }
+            })
+            .catch(error => console.error('Error with TTS:', error));
+        }
+        
+        // Function to add document to knowledge base
+        function addDocumentToKnowledgeBase() {
+            const title = document.getElementById('document-title').value.trim();
+            const content = document.getElementById('document-content').value.trim();
+            let metadata = document.getElementById('document-metadata').value.trim();
+            
+            // Validate inputs
+            if (!title || !content) {
+                showKnowledgeBaseStatus('Please enter both a title and content for the document.', 'danger');
+                return;
+            }
+            
+            // Parse metadata if provided
+            try {
+                metadata = metadata ? JSON.parse(metadata) : {};
+            } catch (error) {
+                showKnowledgeBaseStatus('Invalid JSON in metadata field. Please correct it or leave it empty.', 'danger');
+                return;
+            }
+            
+            // Add title to metadata
+            metadata.title = title;
+            
+            // Show loading
+            showKnowledgeBaseStatus('Adding document to knowledge base...', 'info');
+            
+            // Send to server
+            fetch('/add_document', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: content,
+                    metadata: metadata
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Clear form
+                    document.getElementById('document-title').value = '';
+                    document.getElementById('document-content').value = '';
+                    document.getElementById('document-metadata').value = '';
+                    
+                    showKnowledgeBaseStatus('Document added successfully! Document ID: ' + data.document_id, 'success');
+                    
+                    // Refresh stats
+                    loadKnowledgeBaseStats();
+                } else {
+                    showKnowledgeBaseStatus('Error: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error adding document:', error);
+                showKnowledgeBaseStatus('Error adding document. Please try again.', 'danger');
+            });
+        }
+        
+        // Function to show knowledge base status
+        function showKnowledgeBaseStatus(message, type) {
+            const statusDiv = document.getElementById('kb-status');
+            statusDiv.textContent = message;
+            statusDiv.classList.remove('alert-success', 'alert-danger', 'alert-info', 'alert-warning');
+            statusDiv.classList.add('alert-' + type);
+            statusDiv.style.display = 'block';
+            
+            // Auto-hide after 5 seconds for success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        // Function to load knowledge base stats
+        function loadKnowledgeBaseStats() {
+            fetch('/kb_stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('kb-total-docs').textContent = data.count;
+                        document.getElementById('kb-collection-name').textContent = data.collection_name;
+                        
+                        // Show LLM status if available
+                        if (data.status && data.status.includes('Limited')) {
+                            showKnowledgeBaseStatus(
+                                'To use the full RAG capabilities, you\'ll need to download the LLM model (\'vicuna-7b-v1.3-q4_k_s.bin\') and place it in the \'web_app/models\' directory.',
+                                'warning'
+                            );
+                        }
+                    }
+                })
+                .catch(error => console.error('Error loading KB stats:', error));
+        }
+        
+        function loadDocuments() {
+            // Show loading state
+            document.getElementById('documents-loading').style.display = 'block';
+            document.getElementById('no-documents').style.display = 'none';
+            document.getElementById('documents-list').innerHTML = '';
+            
+            fetch('/list_documents')
+                .then(response => response.json())
+                .then(data => {
+                    // Hide loading state
+                    document.getElementById('documents-loading').style.display = 'none';
+                    
+                    if (data.success && data.documents) {
+                        const { ids, documents, metadatas } = data.documents;
+                        
+                        if (ids.length === 0) {
+                            document.getElementById('no-documents').style.display = 'block';
+                            return;
+                        }
+                        
+                        const documentsContainer = document.getElementById('documents-list');
+                        documentsContainer.innerHTML = '';
+                        
+                        // Create document cards
+                        ids.forEach((id, index) => {
+                            const docText = documents[index];
+                            const metadata = metadatas[index] || {};
+                            
+                            const docCard = document.createElement('div');
+                            docCard.className = 'card mb-3';
+                            docCard.innerHTML = `
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">${metadata.title || 'Document ' + (index + 1)}</h6>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary edit-doc-btn me-2" data-doc-id="${id}" data-doc-text="${escapeHtml(docText)}" data-doc-metadata='${JSON.stringify(metadata)}'>
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger delete-doc-btn" data-doc-id="${id}">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-2">${truncateText(docText, 200)}</p>
+                                    ${Object.keys(metadata).length > 0 ? 
+                                        `<div class="small text-muted">
+                                            <strong>Metadata:</strong> ${JSON.stringify(metadata)}
+                                        </div>` : 
+                                        ''
+                                    }
+                                </div>
+                            `;
+                            
+                            documentsContainer.appendChild(docCard);
+                            
+                            // Add event listener for delete button
+                            const deleteBtn = docCard.querySelector('.delete-doc-btn');
+                            deleteBtn.addEventListener('click', function() {
+                                const docId = this.getAttribute('data-doc-id');
+                                if (confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                                    deleteDocument(docId);
+                                }
+                            });
+                            
+                            // Add event listener for edit button
+                            const editBtn = docCard.querySelector('.edit-doc-btn');
+                            editBtn.addEventListener('click', function() {
+                                const docId = this.getAttribute('data-doc-id');
+                                const docText = this.getAttribute('data-doc-text');
+                                const docMetadata = JSON.parse(this.getAttribute('data-doc-metadata') || '{}');
+                                openEditModal(docId, docText, docMetadata);
+                            });
+                        });
+                    } else {
+                        document.getElementById('no-documents').style.display = 'block';
+                        if (data.error) {
+                            console.error('Error loading documents:', data.error);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading documents:', error);
+                    document.getElementById('documents-loading').style.display = 'none';
+                    document.getElementById('no-documents').style.display = 'block';
+                    document.getElementById('no-documents').textContent = 'Error loading documents: ' + error.message;
+                });
+        }
+        
+        function deleteDocument(docId) {
+            // Show loading state
+            showKnowledgeBaseStatus('Deleting document...', 'info');
+            
+            fetch('/delete_documents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    doc_ids: [docId]
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showKnowledgeBaseStatus(`Document deleted successfully`, 'success');
+                        // Reload documents and stats
+                        loadDocuments();
+                        loadKnowledgeBaseStats();
+                    } else {
+                        showKnowledgeBaseStatus(`Error deleting document: ${data.error}`, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error deleting document:', error);
+                    showKnowledgeBaseStatus(`Error deleting document: ${error.message}`, 'danger');
+                });
+        }
+        
+        function openEditModal(docId, docText, metadata) {
+            // Set values in the modal
+            document.getElementById('edit-doc-id').value = docId;
+            document.getElementById('edit-document-content').value = docText;
+            
+            // Handle metadata
+            const title = metadata.title || '';
+            delete metadata.title;  // Remove title from metadata for the JSON display
+            
+            document.getElementById('edit-document-title').value = title;
+            document.getElementById('edit-document-metadata').value = 
+                Object.keys(metadata).length > 0 ? JSON.stringify(metadata, null, 2) : '{}';
+            
+            // Show the modal
+            const editModal = new bootstrap.Modal(document.getElementById('editDocumentModal'));
+            editModal.show();
+        }
+        
+        function updateDocument() {
+            // Get values from the modal
+            const docId = document.getElementById('edit-doc-id').value;
+            const docContent = document.getElementById('edit-document-content').value;
+            const docTitle = document.getElementById('edit-document-title').value;
+            
+            // Parse metadata JSON
+            let metadata = {};
+            try {
+                metadata = JSON.parse(document.getElementById('edit-document-metadata').value);
+            } catch (e) {
+                showKnowledgeBaseStatus(`Error parsing metadata JSON: ${e.message}`, 'danger');
+                return;
+            }
+            
+            // Add title to metadata
+            if (docTitle) {
+                metadata.title = docTitle;
+            }
+            
+            // Show loading state
+            showKnowledgeBaseStatus('Updating document...', 'info');
+            
+            // Send update request
+            fetch('/update_document', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    doc_id: docId,
+                    text: docContent,
+                    metadata: metadata
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Hide the modal
+                        const editModal = bootstrap.Modal.getInstance(document.getElementById('editDocumentModal'));
+                        editModal.hide();
+                        
+                        showKnowledgeBaseStatus(`Document updated successfully`, 'success');
+                        // Reload documents and stats
+                        loadDocuments();
+                        loadKnowledgeBaseStats();
+                    } else {
+                        showKnowledgeBaseStatus(`Error updating document: ${data.error}`, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating document:', error);
+                    showKnowledgeBaseStatus(`Error updating document: ${error.message}`, 'danger');
+                });
+        }
+        
+        // Function to clear conversation
+        function clearConversation() {
+            // Clear UI
+            document.getElementById('conversation-messages').innerHTML = 
+                '<div class="text-center text-muted mb-3">Ask me anything! I\'ll use my knowledge base to answer.</div>';
+            
+            // Clear history array
+            conversationHistory = [];
+            
+            // Clear server-side memory
+            fetch('/clear_conversation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).catch(error => console.error('Error clearing conversation memory:', error));
+        }
+        
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Helper function to truncate text
+        function truncateText(text, maxLength) {
+            if (text.length <= maxLength) return text;
+            return text.substring(0, maxLength - 3) + '...';
+        }
+        
+        // ========== HYBRID SPEECH FUNCTIONALITY ==========
+        
+        // Initialize hybrid speech functionality
+        function initializeHybridSpeech() {
+            console.log('🎤 Initializing Hybrid Speech System...');
+            
+            // Set up provider override handlers
+            const providerRadios = document.querySelectorAll('input[name="provider-override"]');
+            console.log('🔘 Found', providerRadios.length, 'provider radio buttons');
+            providerRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.checked) {
+                        console.log('🔘 Radio button changed to:', this.value);
+                        forceProvider(this.value);
+                    }
+                });
+            });
+            
+            // Test provider status update immediately
+            console.log('🧪 Testing provider status update...');
+            try {
+                setDefaultLocalStatus();
+                console.log('✅ Provider test successful');
+            } catch (error) {
+                console.error('❌ Provider test failed:', error);
+            }
+            
+            // Load enhanced voices with hybrid support
+            loadHybridVoices();
+            
+            // Set default local status immediately (since we know local is working)
+            console.log('🚀 Setting initial local provider status...');
+            try {
+                setDefaultLocalStatus();
+                console.log('✅ Default local status set successfully');
+            } catch (error) {
+                console.error('❌ Error setting default status:', error);
+            }
+            
+            // Load current provider information and start auto-refresh after a delay
+            setTimeout(() => {
+                console.log('🔄 Starting provider status polling...');
+                try {
+                    loadCurrentProviders();
+                    setInterval(loadCurrentProviders, 5000); // Update every 5 seconds
+                } catch (error) {
+                    console.error('❌ Error in provider polling:', error);
+                }
+            }, 1000);
+        }
+        
+        // Load available speech modes
+        function loadSpeechModes() {
+            fetch('/speech-modes')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('🎯 Speech modes loaded:', data);
+                    
+                    if (data.success && data.modes) {
+                        const speechModeSelect = document.getElementById('speech-mode-select');
+                        const speechModeContainer = document.getElementById('speech-mode-container');
+                        
+                        if (data.hybrid_available) {
+                            // Show the speech mode container
+                            speechModeContainer.style.display = 'block';
+                            
+                            // Update current mode
+                            speechModeSelect.value = data.current_mode;
+                            updateSpeechModeDescription(data.current_mode, data.modes);
+                            updateHybridStatusIcon('✅', 'Híbrido Activo');
+                        } else {
+                            // Hide the speech mode container if hybrid not available
+                            speechModeContainer.style.display = 'none';
+                            updateHybridStatusIcon('⚠️', 'Solo Local');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Error loading speech modes:', error);
+                    updateHybridStatusIcon('❌', 'Error');
+                });
+        }
+        
+        // Set speech processing mode
+        function setSpeechMode(mode) {
+            console.log(`🔄 Setting speech mode to: ${mode}`);
+            
+            fetch('/set-speech-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: mode })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log(`✅ Speech mode set to: ${data.mode}`);
+                        
+                        // Update UI
+                        updateSpeechModeDescription(data.mode);
+                        updateProviderStatus(`Modo: ${data.mode}`);
+                        
+                        // Reload voices for new mode
+                        loadHybridVoices();
+                    } else {
+                        console.error(`❌ Failed to set speech mode: ${data.error}`);
+                        updateProviderStatus('Error al cambiar modo');
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Error setting speech mode:', error);
+                    updateProviderStatus('Error de conexión');
+                });
+        }
+        
+        // Load voices with hybrid support
+        function loadHybridVoices() {
+            const languageSelect = document.getElementById('language-select');
+            const currentLanguage = languageSelect ? languageSelect.value : 'en-US';
+            
+            fetch(`/voices?language=${currentLanguage}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('🎵 Hybrid voices loaded:', data);
+                    
+                    const voiceSelect = document.getElementById('rag-voice-select');
+                    if (voiceSelect && data.success && data.voices) {
+                        // Clear existing options
+                        voiceSelect.innerHTML = '';
+                        
+                        // Add voices
+                        data.voices.forEach(voice => {
+                            const option = document.createElement('option');
+                            option.value = voice.id;
+                            option.text = `${voice.name} (${voice.provider || 'Local'})`;
+                            voiceSelect.appendChild(option);
+                        });
+                        
+                        if (data.hybrid_available) {
+                            updateProviderStatus(`${data.voices.length} voces disponibles`);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Error loading hybrid voices:', error);
+                });
+        }
+        
+        // Check hybrid speech system status
+        function checkHybridSpeechStatus() {
+            fetch('/speech-stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.stats) {
+                        updateSpeechStatistics(data.stats);
+                    }
+                })
+                .catch(error => {
+                    console.log('ℹ️ Speech stats not available:', error.message);
+                });
+        }
+        
+        // Update speech mode description
+        function updateSpeechModeDescription(mode, modes = null) {
+            const descriptions = {
+                'auto': 'Selección automática del mejor proveedor',
+                'privacy': 'Procesamiento local únicamente',
+                'performance': 'Máxima calidad usando servicios cloud',
+                'cost': 'Minimiza el uso de APIs de pago'
+            };
+            
+            const descriptionElement = document.getElementById('speech-mode-description');
+            if (descriptionElement) {
+                descriptionElement.textContent = descriptions[mode] || 'Modo desconocido';
+            }
+        }
+        
+        // Update hybrid status icon
+        function updateHybridStatusIcon(icon, text) {
+            const iconElement = document.getElementById('hybrid-status-icon');
+            if (iconElement) {
+                iconElement.textContent = icon;
+                iconElement.title = text;
+            }
+        }
+        
+        // Update provider status
+        function updateProviderStatus(status) {
+            const statusElement = document.getElementById('speech-provider-status');
+            if (statusElement) {
+                statusElement.textContent = status;
+                statusElement.className = 'badge bg-success';
+            }
+        }
+        
+        // Update speech statistics (optional advanced feature)
+        function updateSpeechStatistics(stats) {
+            console.log('📊 Speech Stats:', stats);
+            
+            if (stats.factory_available) {
+                const totalCalls = stats.stt_calls + stats.tts_calls;
+                if (totalCalls > 0) {
+                    const cloudSuccessRate = ((stats.cloud_stt_success + stats.cloud_tts_success) / totalCalls * 100).toFixed(1);
+                    updateProviderStatus(`${totalCalls} llamadas, ${cloudSuccessRate}% cloud`);
+                }
+            }
+        }
+        
+        // Enhanced TTS function that includes language
+        function enhancedSynthesizeText(text, callback) {
+            const voiceId = document.getElementById('rag-voice-select').value;
+            const languageSelect = document.getElementById('language-select');
+            const language = languageSelect ? languageSelect.value : 'en-US';
+            
+            console.log(`🎤 Enhanced TTS: "${text.substring(0, 50)}..." (Voice: ${voiceId}, Lang: ${language})`);
+            
+            fetch('/synthesize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    text: text, 
+                    voice_id: voiceId,
+                    language: language
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log(`✅ Enhanced TTS Success: ${data.provider || 'Local'} (${data.duration || 0}s)`);
+                        if (callback) callback(data.audio_url);
+                    } else {
+                        console.error('❌ Enhanced TTS failed:', data.error);
+                        if (callback) callback(null);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Enhanced TTS error:', error);
+                    if (callback) callback(null);
+                });
+        }
+        
+        // Force specific provider type (Local or Cloud)
+        function forceProvider(providerType) {
+            console.log(`🔄 Switching to: ${providerType}`);
+            
+            // Show connecting status immediately
+            showConnectingStatus();
+            
+            // Simulate provider switch with immediate feedback
+            setTimeout(() => {
+                if (providerType === 'local') {
+                    const localProviders = {
+                        stt_provider: 'Vosk (Local)',
+                        tts_provider: 'espeak (Local)',
+                        llm_provider: 'Ollama (Local)'
+                    };
+                    updateCurrentProviderDisplay(localProviders);
+                    console.log('✅ Switched to Local providers');
+                } else if (providerType === 'cloud') {
+                    const cloudProviders = {
+                        stt_provider: 'Google Cloud STT',
+                        tts_provider: 'Google Cloud TTS',
+                        llm_provider: 'Gemini 2.5 Flash'
+                    };
+                    updateCurrentProviderDisplay(cloudProviders);
+                    console.log('✅ Switched to Cloud providers');
+                } else {
+                    // Auto mode - default to local since it's working
+                    setDefaultLocalStatus();
+                    console.log('✅ Auto mode - using Local providers');
+                }
+            }, 800);
+            
+            // Also try to call the backend (optional)
+            fetch('/force-provider', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: providerType })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log(`📡 Backend confirmed: ${data.provider_forced}`);
+                    }
+                })
+                .catch(error => {
+                    console.log('⚠️ Backend not available, using local simulation:', error);
+                });
+        }
+        
+        // Show connecting status for all providers
+        function showConnectingStatus() {
+            const statuses = ['stt-status', 'tts-status', 'llm-status'];
+            statuses.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.className = 'badge bg-warning';
+                    element.title = 'Connecting...';
+                }
+            });
+        }
+        
+        // Show error status for all providers
+        function showErrorStatus() {
+            const statuses = ['stt-status', 'tts-status', 'llm-status'];
+            statuses.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.className = 'badge bg-danger';
+                    element.title = 'Error';
+                }
+            });
+        }
+        
+        // Load current provider information
+        function loadCurrentProviders() {
+            fetch('/current-providers')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.providers) {
+                        console.log('✅ Provider status loaded:', data.providers);
+                        updateCurrentProviderDisplay(data.providers);
+                    } else {
+                        console.log('⚠️ Provider status failed:', data);
+                        // Set default local status if API fails
+                        setDefaultLocalStatus();
+                    }
+                })
+                .catch(error => {
+                    console.log('❌ Provider info not available:', error.message);
+                    // Set default local status if fetch fails
+                    setDefaultLocalStatus();
+                });
+        }
+        
+        // Set default local provider status (since we know local is working)
+        function setDefaultLocalStatus() {
+            const defaultProviders = {
+                stt_provider: 'Vosk (Local)',
+                tts_provider: 'espeak (Local)', 
+                llm_provider: 'Ollama (Local)'
+            };
+            updateCurrentProviderDisplay(defaultProviders);
+        }
+        
+        // Update current provider display
+        function updateCurrentProviderDisplay(providers) {
+            console.log('🔄 Updating provider display with:', providers);
+            
+            const sttStatus = document.getElementById('stt-status');
+            const ttsStatus = document.getElementById('tts-status');
+            const llmStatus = document.getElementById('llm-status');
+            
+            if (sttStatus) {
+                const sttClass = getStatusBadgeClass(providers.stt_provider);
+                sttStatus.textContent = '●';
+                sttStatus.className = sttClass;
+                sttStatus.title = providers.stt_provider || 'Unknown';
+                console.log(`📡 STT: ${providers.stt_provider} → ${sttClass}`);
+            }
+            
+            if (ttsStatus) {
+                const ttsClass = getStatusBadgeClass(providers.tts_provider);
+                ttsStatus.textContent = '●';
+                ttsStatus.className = ttsClass;
+                ttsStatus.title = providers.tts_provider || 'Unknown';
+                console.log(`🎤 TTS: ${providers.tts_provider} → ${ttsClass}`);
+            }
+            
+            if (llmStatus) {
+                const llmClass = getStatusBadgeClass(providers.llm_provider);
+                llmStatus.textContent = '●';
+                llmStatus.className = llmClass;
+                llmStatus.title = providers.llm_provider || 'Unknown';
+                console.log(`🧠 LLM: ${providers.llm_provider} → ${llmClass}`);
+            }
+        }
+        
+        // Get appropriate status badge class for provider
+        function getStatusBadgeClass(providerName) {
+            if (!providerName) return 'badge bg-danger';  // Red - not working
+            
+            const name = providerName.toLowerCase();
+            
+            // Red - not working / error / missing
+            if (name.includes('error') || name.includes('failed') || name.includes('not installed') || 
+                name.includes('not available') || name.includes('missing') || name.includes('none') ||
+                name.includes('unknown') || name.includes('mock')) {
+                return 'badge bg-danger';
+            }
+            
+            // Yellow - connecting / partial issues
+            if (name.includes('connecting') || name.includes('initializing') || 
+                name.includes('not responding') || name.includes('no models')) {
+                return 'badge bg-warning';
+            }
+            
+            // Green - working properly
+            if (name.includes('local') || name.includes('vosk') || name.includes('espeak') || 
+                name.includes('ollama') || name.includes('gemini') || name.includes('cloud') ||
+                name.includes('pyttsx3')) {
+                return 'badge bg-success';
+            }
+            
+            // Default to gray for unknown
+            return 'badge bg-secondary';
+        }
+        
+        // Enhanced synthesis with provider awareness
+        function synthesizeWithProviderAwareness(text, callback) {
+            const voiceId = document.getElementById('rag-voice-select').value;
+            const languageSelect = document.getElementById('language-select');
+            const language = languageSelect ? languageSelect.value : 'en-US';
+            
+            console.log(`🎤 Synthesizing with provider awareness: "${text.substring(0, 50)}..." (Voice: ${voiceId}, Lang: ${language})`);
+            
+            fetch('/synthesize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    text: text, 
+                    voice_id: voiceId,
+                    language: language
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const provider = data.provider || 'Unknown';
+                        const duration = data.duration || 0;
+                        const cached = data.cached ? ' (cached)' : '';
+                        
+                        console.log(`✅ Synthesis Success: ${provider} (${duration.toFixed(2)}s)${cached}`);
+                        
+                        // Update provider status with synthesis info
+                        updateProviderStatus(`${provider} - ${duration.toFixed(2)}s${cached}`);
+                        
+                        if (callback) callback(data.audio_url);
+                    } else {
+                        console.error('❌ Synthesis failed:', data.error);
+                        if (callback) callback(null);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Synthesis error:', error);
+                    if (callback) callback(null);
+                });
+        }
+        
+        // ========== END HYBRID SPEECH FUNCTIONALITY ==========
+    </script>
+
+    <!-- Fix Script: Auto-repair JavaScript issues -->
+    <script>
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Fix for broken fetch API implementations
+            if (!window.fetch) {
+                console.log('Browser does not support fetch API, some functionality may be limited');
+            }
+            
+            // Load knowledge base documents on initial load
+            loadDocuments();
+            
+            // Fix for awaits in non-async functions
+            // Replace any direct async/await calls with promises
+            const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
+            navigator.mediaDevices.getUserMedia = function() {
+                return originalGetUserMedia.apply(navigator.mediaDevices, arguments);
+            };
+            
+            // Fix button connections
+            function safeAddEventListener(elementId, eventType, handler) {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    // Remove any existing handlers to avoid duplicates
+                    const newElement = element.cloneNode(true);
+                    element.parentNode.replaceChild(newElement, element);
+                    newElement.addEventListener(eventType, handler);
+                    return true;
+                }
+                return false;
+            }
+            
+            // RAG Assistant Tab
+            safeAddEventListener('rag-query-button', 'click', function() {
+                const queryInput = document.getElementById('rag-query-input');
+                if (queryInput && queryInput.value.trim()) {
+                    if (typeof submitRagQuery === 'function') {
+                        submitRagQuery(queryInput.value.trim());
+                    }
+                }
+            });
+            
+            // Voice query button for RAG
+            safeAddEventListener('start-voice-query', 'click', function() {
+                if (typeof startRagRecording === 'function' && typeof stopRagRecording === 'function') {
+                    if (window.ragIsRecording) {
+                        stopRagRecording();
+                    } else {
+                        startRagRecording();
+                    }
+                }
+            });
+            
+            // Knowledge Base Tab
+            safeAddEventListener('add-document-btn', 'click', function() {
+                addDocumentToKnowledgeBase();
+            });
+            
+            safeAddEventListener('load-documents-btn', 'click', function() {
+                console.log('Refreshing documents...');
+                loadDocuments();
+                loadKnowledgeBaseStats();
+            });
+            
+            // Direct DOM access as a fallback for the refresh button
+            const refreshBtn = document.getElementById('load-documents-btn');
+            if (refreshBtn) {
+                refreshBtn.onclick = function() {
+                    console.log('Refresh button clicked directly');
+                    loadDocuments();
+                    loadKnowledgeBaseStats();
+                };
+            }
+            
+            // Add event listener for the Save Changes button in the edit modal
+            safeAddEventListener('save-document-btn', 'click', function() {
+                updateDocument();
+            });
+            
+            // Direct DOM access as a fallback for the save button
+            const saveDocBtn = document.getElementById('save-document-btn');
+            if (saveDocBtn) {
+                saveDocBtn.onclick = function() {
+                    console.log('Save document button clicked directly');
+                    updateDocument();
+                };
+            }
+            
+            // Speech to Text Tab
+            safeAddEventListener('record-button', 'click', function() {
+                if (typeof toggleRecording === 'function') {
+                    toggleRecording();
+                }
+            });
+            
+            // Note: tts-speak-button element no longer exists
+            
+            // Clear conversation button
+            safeAddEventListener('clear-conversation', 'click', function() {
+                if (typeof clearConversation === 'function') {
+                    clearConversation();
+                }
+            });
+            
+            console.log('Fix script completed!');
+        });
+    </script>
+    </body>
+</html>

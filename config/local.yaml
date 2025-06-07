@@ -1,0 +1,82 @@
+# Local Deployment Configuration
+# Optimized for privacy-focused, on-premises deployment
+
+deployment_mode: local
+environment: development
+
+# Provider Configuration
+providers:
+  llm:
+    type: ollama
+    model: mistral:7b
+    api_url: http://localhost:11434
+    timeout: 30
+    max_tokens: 2048
+    temperature: 0.7
+  
+  stt:
+    type: local_whisper
+    model_path: web_app/models
+    languages:
+      - en-US
+      - es-ES
+    sample_rate: 16000
+    
+  tts:
+    type: local_tts
+    engine: espeak  # Linux/WSL2
+    # engine: pyttsx3  # Windows
+    voices:
+      spanish:
+        language: es-la
+        speed: 175
+        amplitude: 120
+        pitch: 48
+      english:
+        language: en+f3
+        speed: 170
+        amplitude: 120
+        pitch: 48
+  
+  vector_store:
+    type: chromadb
+    path: ../vector_db
+    collection_name: knowledge_base
+    
+  embeddings:
+    type: sentence_transformers
+    model: sentence-transformers/all-MiniLM-L6-v2
+    dimensions: 384
+
+# Application Configuration
+app:
+  host: localhost
+  port: 5000
+  debug: true
+  ssl_enabled: true
+  ssl_cert_path: ssl/cert.pem
+  ssl_key_path: ssl/key.pem
+
+# Performance Settings
+performance:
+  batch_size: 16
+  max_workers: 4
+  model_preloading: true
+  gpu_enabled: true
+  memory_limit: 8GB
+
+# Security Settings
+security:
+  cors_enabled: true
+  allowed_origins:
+    - https://localhost:5000
+    - https://127.0.0.1:5000
+  rate_limiting:
+    enabled: false  # Not needed for local deployment
+    
+# Logging Configuration
+logging:
+  level: INFO
+  file_path: logs/aiedu_local.log
+  max_file_size: 10MB
+  backup_count: 5 

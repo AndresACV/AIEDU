@@ -1,0 +1,12 @@
+fastapi==0.115.9
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Keep existing AI/ML dependencies from main project
+chromadb>=0.4.17
+sentence-transformers>=2.2.2
+vosk>=0.3.45
+requests>=2.31.0
+flask-cors>=4.0.0  # For compatibility during migration
+python-dotenv>=1.0.0 

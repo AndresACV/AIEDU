@@ -1,0 +1,117 @@
+# Cloud Deployment Configuration
+# Optimized for Google Cloud AI + Vercel serverless deployment
+
+deployment_mode: cloud
+environment: production
+
+# Provider Configuration
+providers:
+  llm:
+    type: gemini
+    model: gemini-2.5-flash
+    api_key_env: GEMINI_API_KEY
+    timeout: 10
+    max_tokens: 2048
+    temperature: 0.7
+    safety_settings:
+      harassment: BLOCK_MEDIUM_AND_ABOVE
+      hate_speech: BLOCK_MEDIUM_AND_ABOVE
+      dangerous_content: BLOCK_MEDIUM_AND_ABOVE
+    rate_limits:
+      requests_per_minute: 15  # Free tier limit
+      tokens_per_day: 1000000  # Free tier limit
+  
+  stt:
+    type: google_cloud_stt
+    credentials_env: GOOGLE_APPLICATION_CREDENTIALS
+    model: latest_long
+    languages:
+      - es-ES
+      - en-US
+    encoding: WEBM_OPUS
+    sample_rate: 48000
+    enable_automatic_punctuation: true
+    enable_word_confidence: true
+    
+  tts:
+    type: google_cloud_tts
+    credentials_env: GOOGLE_APPLICATION_CREDENTIALS
+    voices:
+      spanish:
+        language_code: es-ES
+        name: es-ES-Neural2-C
+        gender: FEMALE
+      english:
+        language_code: en-US
+        name: en-US-Neural2-F
+        gender: FEMALE
+    audio_encoding: MP3
+    speaking_rate: 1.0
+    pitch: 0.0
+    volume_gain_db: 0.0
+  
+  vector_store:
+    type: pinecone
+    api_key_env: PINECONE_API_KEY
+    environment_env: PINECONE_ENVIRONMENT
+    index_name: aiedu-knowledge-base
+    dimension: 1536
+    metric: cosine
+    
+  embeddings:
+    type: openai
+    model: text-embedding-ada-002
+    api_key_env: OPENAI_API_KEY
+    dimensions: 1536
+
+# Application Configuration
+app:
+  host: 0.0.0.0  # Vercel requirement
+  port: 3000     # Vercel default
+  debug: false
+  ssl_enabled: true  # Handled by Vercel
+  cors_enabled: true
+
+# Performance Settings
+performance:
+  batch_size: 8      # Smaller for serverless
+  max_workers: 1     # Serverless single-threaded
+  model_preloading: false  # Not applicable to APIs
+  gpu_enabled: false # Cloud APIs handle this
+  memory_limit: 512MB # Vercel function limit
+  timeout: 10        # Vercel function timeout
+
+# Security Settings
+security:
+  cors_enabled: true
+  allowed_origins:
+    - https://aiedu-rag-system.vercel.app
+    - https://*.vercel.app
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+    requests_per_hour: 1000
+    cost_limiting:
+      enabled: true
+      max_monthly_cost: 100  # USD
+      alert_threshold: 80    # USD
+      
+# Monitoring Configuration
+monitoring:
+  analytics_enabled: true
+  error_tracking: true
+  performance_monitoring: true
+  cost_tracking: true
+  
+# Logging Configuration
+logging:
+  level: INFO
+  provider: vercel  # Built-in Vercel logging
+  retention_days: 30
+  
+# Scaling Configuration
+scaling:
+  auto_scaling: true
+  min_instances: 0
+  max_instances: 100
+  concurrent_executions: 1000 
