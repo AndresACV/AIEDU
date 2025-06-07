@@ -6,6 +6,7 @@ import {
   ForceProviderResponse
 } from '@/types/provider'
 import {
+  Voice,
   VoicesResponse,
   SynthesizeRequest,
   SynthesizeResponse,
@@ -113,59 +114,92 @@ class APIClient {
     return this.get<ProviderResponse>('/api/v1/providers/current')
   }
 
-  // Speech API
+  // Speech API - FastAPI Endpoints
   async getVoices(language?: string): Promise<VoicesResponse> {
-    // Note: FastAPI endpoint doesn't use language parameter yet, will be added in Phase 2
-    return this.get<VoicesResponse>('/api/v1/speech/voices')
+    try {
+      const voices = await this.get<Voice[]>('/api/v1/speech/voices')
+      return {
+        success: true,
+        voices: voices
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to load voices'
+      }
+    }
   }
 
   async synthesize(request: SynthesizeRequest): Promise<SynthesizeResponse> {
-    return this.post<SynthesizeResponse>('/synthesize', request)
+    return this.post<SynthesizeResponse>('/api/v1/speech/synthesize', request)
   }
 
   async transcribe(audioBlob: Blob, language?: string): Promise<TranscribeResponse> {
     const formData = new FormData()
-    formData.append('audio', audioBlob, 'recording.wav')
+    formData.append('file', audioBlob, 'recording.webm')
     if (language) {
       formData.append('language', language)
     }
-    return this.postForm<TranscribeResponse>('/upload-audio', formData)
+    return this.postForm<TranscribeResponse>('/api/v1/speech/transcribe', formData)
   }
 
-  // RAG API
+  async getSpeechStats(): Promise<{ success: boolean; stats?: any }> {
+    return this.get<{ success: boolean; stats?: any }>('/api/v1/speech/stats')
+  }
+
+  async cleanupSpeechFiles(): Promise<{ success: boolean; message?: string }> {
+    return this.post<{ success: boolean; message?: string }>('/api/v1/speech/cleanup')
+  }
+
+  // RAG API - FastAPI Endpoints  
   async ragQuery(request: RagQueryRequest): Promise<RagQueryResponse> {
-    return this.post<RagQueryResponse>('/rag_query', request)
-  }
-
-  async ragQueryWithSpeech(request: RagQueryRequest): Promise<RagQueryResponse> {
-    return this.post<RagQueryResponse>('/rag_to_speech', request)
+    // Use extended timeout for RAG queries (Ollama model loading can take 60+ seconds)
+    const response: AxiosResponse<RagQueryResponse> = await this.client.post('/api/v1/rag/query', request, {
+      timeout: 120000, // 2 minutes timeout for RAG queries (model loading + inference)
+    })
+    return response.data
   }
 
   async addDocument(request: DocumentRequest): Promise<DocumentResponse> {
-    return this.post<DocumentResponse>('/add_document', {
-      text: request.content,
-      metadata: { ...request.metadata, title: request.title }
+    return this.post<DocumentResponse>('/api/v1/rag/documents', {
+      title: request.title,
+      content: request.content,
+      metadata: request.metadata || {}
     })
   }
 
   async listDocuments(): Promise<DocumentsListResponse> {
-    return this.get<DocumentsListResponse>('/list_documents')
+    return this.get<DocumentsListResponse>('/api/v1/rag/documents')
   }
 
-  async updateDocument(docId: string, request: DocumentRequest): Promise<DocumentResponse> {
-    return this.post<DocumentResponse>('/update_document', {
-      doc_id: docId,
-      text: request.content,
-      metadata: { ...request.metadata, title: request.title }
-    })
+  async ragDocuments(): Promise<any[]> {
+    return this.get<any[]>('/api/v1/rag/documents')
   }
 
-  async deleteDocuments(docIds: string[]): Promise<DocumentResponse> {
-    return this.post<DocumentResponse>('/delete_documents', { doc_ids: docIds })
+  async ragUpload(formData: FormData): Promise<DocumentResponse> {
+    return this.postForm<DocumentResponse>('/api/v1/rag/upload', formData)
   }
 
-  async getKnowledgeBaseStats(): Promise<KnowledgeBaseStats> {
-    return this.get<KnowledgeBaseStats>('/kb_stats')
+  async ragDeleteDocument(docId: string): Promise<DocumentResponse> {
+    return this.delete<DocumentResponse>(`/api/v1/rag/documents/${docId}`)
+  }
+
+  async deleteDocument(docId: string): Promise<DocumentResponse> {
+    return this.delete<DocumentResponse>(`/api/v1/rag/documents/${docId}`)
+  }
+
+  async uploadFile(file: File): Promise<DocumentResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return this.postForm<DocumentResponse>('/api/v1/rag/upload', formData)
+  }
+
+  async getRagStats(): Promise<{ success: boolean; stats?: any }> {
+    return this.get<{ success: boolean; stats?: any }>('/api/v1/rag/stats')
+  }
+
+  async getRagHealth(): Promise<{ success: boolean; status?: string }> {
+    return this.get<{ success: boolean; status?: string }>('/api/v1/rag/health')
   }
 
   async clearConversation(): Promise<{ success: boolean }> {
@@ -173,6 +207,10 @@ class APIClient {
   }
 
   // System API
+  async health(): Promise<{ status: string; service: string }> {
+    return this.get<{ status: string; service: string }>('/health')
+  }
+
   async getSystemStatus(): Promise<{ success: boolean; status?: string }> {
     return this.get<{ success: boolean; status?: string }>('/system/status')
   }

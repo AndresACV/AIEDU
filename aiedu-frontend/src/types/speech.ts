@@ -28,9 +28,17 @@ export interface SynthesizeResponse {
 
 export interface TranscribeResponse {
   success: boolean
-  transcript?: string
+  text?: string
   confidence?: number
-  provider?: string
+  language?: string
+  model_used?: string
+  duration?: number
+  words?: Array<{
+    word: string
+    start?: number
+    end?: number
+    conf?: number
+  }>
   error?: string
 }
 

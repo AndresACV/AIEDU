@@ -51,8 +51,35 @@ async def root():
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "aiedu-backend"}
+    """Health check endpoint with service status."""
+    import requests
+    
+    # Check Ollama status
+    ollama_status = "unknown"
+    ollama_models = []
+    try:
+        response = requests.get("http://localhost:11434/api/tags", timeout=2)
+        if response.status_code == 200:
+            models = response.json().get("models", [])
+            ollama_models = [model["name"] for model in models]
+            ollama_status = "connected" if "mistral:7b" in ollama_models else "model_missing"
+        else:
+            ollama_status = "error"
+    except requests.exceptions.ConnectionError:
+        ollama_status = "not_running"
+    except Exception:
+        ollama_status = "error"
+    
+    return {
+        "status": "healthy", 
+        "service": "aiedu-backend",
+        "ollama": {
+            "status": ollama_status,
+            "models": ollama_models,
+            "required_model": "mistral:7b",
+            "ready": ollama_status == "connected"
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn

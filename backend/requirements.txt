@@ -9,4 +9,9 @@ sentence-transformers>=2.2.2
 vosk>=0.3.45
 requests>=2.31.0
 flask-cors>=4.0.0  # For compatibility during migration
-python-dotenv>=1.0.0 
+python-dotenv>=1.0.0
+
+# Speech processing dependencies
+pyttsx3>=2.90  # Text-to-speech for Windows
+wave  # Audio file processing (built-in)
+# Note: espeak is installed via system package manager on Linux/WSL2 

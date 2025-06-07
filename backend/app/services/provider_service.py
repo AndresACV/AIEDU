@@ -1,5 +1,10 @@
 from typing import Dict, Any
+import os
+import logging
+import requests
 from ..models.providers import ProviderType, ProviderResponse, ProviderInfo, ProvidersDict
+
+logger = logging.getLogger(__name__)
 
 class ProviderService:
     """Service for managing speech and AI providers."""
@@ -9,17 +14,26 @@ class ProviderService:
         
     def get_current_providers(self) -> ProviderResponse:
         """Get current provider status and configuration."""
-        # Mock provider information for Phase 1
-        # In later phases, this will check actual service availability
-        local_info = ProviderInfo(stt="available", tts="available", llm="available")
-        cloud_info = ProviderInfo(stt="available", tts="available", llm="available")
+        # Check actual provider availability
+        local_status = self._check_local_providers()
+        cloud_status = self._check_cloud_providers()
         
-        providers_dict = ProvidersDict(local=local_info, cloud=cloud_info)
+        providers_dict = ProvidersDict(local=local_status, cloud=cloud_status)
+        
+        # Determine current provider names based on selection
+        if self.current_provider == "local":
+            stt_provider = "Vosk (Local)" if local_status.stt == "available" else "Vosk (Error)"
+            tts_provider = "espeak (Local)" if local_status.tts == "available" else "espeak (Error)"
+            llm_provider = "Ollama (Local)" if local_status.llm == "available" else "Ollama (Error)"
+        else:  # cloud
+            stt_provider = "Google Cloud STT" if cloud_status.stt == "available" else "Google Cloud STT (Error)"
+            tts_provider = "Google Cloud TTS" if cloud_status.tts == "available" else "Google Cloud TTS (Error)"
+            llm_provider = "Gemini 2.5 Flash" if cloud_status.llm == "available" else "Gemini 2.5 Flash (Error)"
         
         return ProviderResponse(
-            stt_provider=self.current_provider,
-            tts_provider=self.current_provider,
-            llm_provider=self.current_provider,
+            stt_provider=stt_provider,
+            tts_provider=tts_provider,
+            llm_provider=llm_provider,
             status="FastAPI Backend is running",
             providers=providers_dict
         )
@@ -37,17 +51,188 @@ class ProviderService:
     
     def get_available_voices(self) -> list:
         """Get available voices for current provider."""
-        # Mock voice data for Phase 1
-        # In later phases, this will query actual TTS services
-        return [
-            {
-                "id": "spanish_voice",
-                "name": "Spanish (Latin America)",
-                "language_type": "Spanish"
-            },
-            {
-                "id": "english_voice", 
-                "name": "English (US)",
-                "language_type": "English"
-            }
-        ]
+        if self.current_provider == "cloud":
+            # Cloud voices (Google Cloud TTS)
+            return [
+                {
+                    "id": "es-ES-Neural2-C",
+                    "name": "Spanish Neural (Female)",
+                    "language_type": "Spanish",
+                    "provider": "Google Cloud"
+                },
+                {
+                    "id": "en-US-Neural2-F",
+                    "name": "English Neural (Female)",
+                    "language_type": "English",  
+                    "provider": "Google Cloud"
+                },
+                {
+                    "id": "en-US-Neural2-A",
+                    "name": "English Neural (Male)",
+                    "language_type": "English",
+                    "provider": "Google Cloud"
+                }
+            ]
+        else:
+            # Local voices (espeak)
+            return [
+                {
+                    "id": "local_es",
+                    "name": "Spanish (Local)",
+                    "language_type": "Spanish",
+                    "provider": "espeak"
+                },
+                {
+                    "id": "local_en",
+                    "name": "English (Local)",
+                    "language_type": "English",
+                    "provider": "espeak"
+                }
+            ]
+    
+    def _check_local_providers(self) -> ProviderInfo:
+        """Check availability of local providers."""
+        stt_status = self._check_vosk_availability()
+        tts_status = self._check_espeak_availability()
+        llm_status = self._check_ollama_availability()
+        
+        return ProviderInfo(stt=stt_status, tts=tts_status, llm=llm_status)
+    
+    def _check_cloud_providers(self) -> ProviderInfo:
+        """Check availability of cloud providers."""
+        stt_status = self._check_google_cloud_stt()
+        tts_status = self._check_google_cloud_tts()
+        llm_status = self._check_gemini_availability()
+        
+        return ProviderInfo(stt=stt_status, tts=tts_status, llm=llm_status)
+    
+    def _check_vosk_availability(self) -> str:
+        """Check if Vosk STT is available."""
+        try:
+            import vosk
+            # Check for model files
+            from pathlib import Path
+            
+            # Try different possible paths
+            possible_paths = [
+                Path("local_deployment/web_app/models"),
+                Path("../local_deployment/web_app/models"),
+                Path("../../local_deployment/web_app/models")
+            ]
+            
+            for models_path in possible_paths:
+                if models_path.exists():
+                    # Check for at least one model
+                    model_dirs = [d for d in models_path.iterdir() if d.is_dir() and "vosk-model" in d.name]
+                    if model_dirs:
+                        return "available"
+            
+            return "error"
+            
+        except ImportError:
+            return "error"
+        except Exception:
+            return "error"
+    
+    def _check_espeak_availability(self) -> str:
+        """Check if espeak TTS is available."""
+        try:
+            import subprocess
+            import platform
+            
+            if platform.system() == "Linux":
+                result = subprocess.run(["which", "espeak"], capture_output=True, timeout=5)
+                return "available" if result.returncode == 0 else "error"
+            else:
+                # For other platforms, check pyttsx3
+                import pyttsx3
+                return "available"
+                
+        except Exception:
+            return "error"
+    
+    def _check_ollama_availability(self) -> str:
+        """Check if Ollama LLM is available."""
+        try:
+            response = requests.get("http://localhost:11434/api/tags", timeout=3)
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                return "available" if models else "error"
+            return "error"
+            
+        except Exception:
+            return "error"
+    
+    def _check_google_cloud_stt(self) -> str:
+        """Check if Google Cloud STT is available."""
+        credentials_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not credentials_env:
+            return "error"
+        
+        # Check if it's a file path or JSON string
+        if credentials_env.startswith('{'):
+            # It's a JSON string - Google Cloud libraries will use it
+            try:
+                from google.cloud import speech
+                # Just check if we can import and create client
+                return "available"
+            except ImportError:
+                logger.debug("Google Cloud Speech libraries not installed")
+                return "error"
+            except Exception as e:
+                logger.debug(f"Google Cloud STT error: {e}")
+                return "error"
+        else:
+            # It's a file path
+            if not os.path.exists(credentials_env):
+                return "error"
+            try:
+                from google.cloud import speech
+                return "available"
+            except Exception:
+                return "error"
+    
+    def _check_google_cloud_tts(self) -> str:
+        """Check if Google Cloud TTS is available."""
+        credentials_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not credentials_env:
+            return "error"
+        
+        # Check if it's a file path or JSON string
+        if credentials_env.startswith('{'):
+            # It's a JSON string - Google Cloud libraries will use it
+            try:
+                from google.cloud import texttospeech
+                # Just check if we can import
+                return "available"
+            except ImportError:
+                logger.debug("Google Cloud TTS libraries not installed")
+                return "error"
+            except Exception as e:
+                logger.debug(f"Google Cloud TTS error: {e}")
+                return "error"
+        else:
+            # It's a file path
+            if not os.path.exists(credentials_env):
+                return "error"
+            try:
+                from google.cloud import texttospeech
+                return "available"
+            except Exception:
+                return "error"
+    
+    def _check_gemini_availability(self) -> str:
+        """Check if Gemini LLM is available."""
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key or not api_key.strip():
+            return "error"
+        
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            
+            # Try to create a model instance
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            return "available"
+        except Exception:
+            return "error"
