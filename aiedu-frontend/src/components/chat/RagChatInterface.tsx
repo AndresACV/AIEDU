@@ -33,10 +33,13 @@ interface RagChatInterfaceProps {
   enableSpeech?: boolean
   enableVoiceInput?: boolean
   autoSpeak?: boolean
+  autoSendOnVoice?: boolean
+  onAutoSendToggle?: (enabled: boolean) => void
   className?: string
   maxMessages?: number
   showDocuments?: boolean
   layout?: 'vertical' | 'horizontal' | 'sidebar'
+  initialLanguage?: 'en-US' | 'es-ES'
 }
 
 export default function RagChatInterface({
@@ -44,14 +47,19 @@ export default function RagChatInterface({
   enableSpeech = true,
   enableVoiceInput = true,
   autoSpeak = false,
+  autoSendOnVoice = false,
+  onAutoSendToggle,
   className = '',
   maxMessages = 50,
   showDocuments = true,
-  layout = 'vertical'
+  layout = 'vertical',
+  initialLanguage = 'en-US'
 }: RagChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
+  const [currentLanguage, setCurrentLanguage] = useState<'en-US' | 'es-ES'>(initialLanguage)
+  const [currentAutoSendOnVoice, setCurrentAutoSendOnVoice] = useState(autoSendOnVoice)
   const [ragStats, setRagStats] = useState<{
     totalQueries: number
     avgResponseTime: number
@@ -67,10 +75,33 @@ export default function RagChatInterface({
     isPlaying,
     stopSpeech,
     selectedVoice,
-    voices
+    voices,
+    updateLanguage
   } = useSpeech({
+    defaultLanguage: currentLanguage,
     onError: (error) => onError?.(error)
   })
+
+  // Update speech language when currentLanguage changes
+  useEffect(() => {
+    updateLanguage(currentLanguage)
+  }, [currentLanguage, updateLanguage])
+
+  // Update internal autoSendOnVoice state when prop changes
+  useEffect(() => {
+    setCurrentAutoSendOnVoice(autoSendOnVoice)
+  }, [autoSendOnVoice])
+
+  // Handle language change
+  const handleLanguageChange = (newLanguage: 'en-US' | 'es-ES') => {
+    setCurrentLanguage(newLanguage)
+  }
+
+  // Handle auto-send toggle
+  const handleAutoSendToggle = (enabled: boolean) => {
+    setCurrentAutoSendOnVoice(enabled)
+    onAutoSendToggle?.(enabled)
+  }
 
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -421,6 +452,10 @@ export default function RagChatInterface({
           onSubmit={submitQuery}
           isLoading={isLoading}
           enableVoice={enableVoiceInput}
+          autoSendOnVoice={currentAutoSendOnVoice}
+          onAutoSendToggle={handleAutoSendToggle}
+          language={currentLanguage}
+          onLanguageChange={handleLanguageChange}
           className="border-0 rounded-none"
         />
       </div>

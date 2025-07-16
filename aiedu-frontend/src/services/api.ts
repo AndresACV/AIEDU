@@ -115,6 +115,19 @@ class APIClient {
   }
 
   // Speech API - FastAPI Endpoints
+  async synthesize(request: SynthesizeRequest): Promise<SynthesizeResponse> {
+    return this.post<SynthesizeResponse>('/api/v1/speech/synthesize', request)
+  }
+
+  async transcribe(audioBlob: Blob, language: string = 'en-US'): Promise<TranscribeResponse> {
+    const formData = new FormData()
+    formData.append('file', audioBlob, 'audio.webm')
+    
+    // Add language as query parameter
+    const url = `/api/v1/speech/transcribe?language=${encodeURIComponent(language)}`
+    return this.postForm<TranscribeResponse>(url, formData)
+  }
+
   async getVoices(language?: string): Promise<VoicesResponse> {
     try {
       const voices = await this.get<Voice[]>('/api/v1/speech/voices')
@@ -130,20 +143,12 @@ class APIClient {
     }
   }
 
-  async synthesize(request: SynthesizeRequest): Promise<SynthesizeResponse> {
-    return this.post<SynthesizeResponse>('/api/v1/speech/synthesize', request)
+  // Alias for getVoices to maintain compatibility
+  async voices(language?: string): Promise<VoicesResponse> {
+    return this.getVoices(language)
   }
 
-  async transcribe(audioBlob: Blob, language?: string): Promise<TranscribeResponse> {
-    const formData = new FormData()
-    formData.append('file', audioBlob, 'recording.webm')
-    if (language) {
-      formData.append('language', language)
-    }
-    return this.postForm<TranscribeResponse>('/api/v1/speech/transcribe', formData)
-  }
-
-  async getSpeechStats(): Promise<{ success: boolean; stats?: any }> {
+  async getVoiceStats(): Promise<{ success: boolean; stats?: any }> {
     return this.get<{ success: boolean; stats?: any }>('/api/v1/speech/stats')
   }
 
@@ -172,8 +177,8 @@ class APIClient {
     return this.get<DocumentsListResponse>('/api/v1/rag/documents')
   }
 
-  async ragDocuments(): Promise<any[]> {
-    return this.get<any[]>('/api/v1/rag/documents')
+  async ragDocuments(): Promise<DocumentsListResponse> {
+    return this.get<DocumentsListResponse>('/api/v1/rag/documents')
   }
 
   async ragUpload(formData: FormData): Promise<DocumentResponse> {

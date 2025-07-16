@@ -19,6 +19,7 @@ interface UnifiedSettings {
   enableSpeech: boolean
   enableVoiceInput: boolean
   autoSpeak: boolean
+  autoSendOnVoice: boolean
   showDocuments: boolean
   language: 'en-US' | 'es-ES'
 }
@@ -39,6 +40,7 @@ export default function UnifiedInterface() {
     enableSpeech: true,
     enableVoiceInput: true,
     autoSpeak: false,
+    autoSendOnVoice: false,
     showDocuments: true,
     language: 'en-US'
   })
@@ -137,14 +139,20 @@ export default function UnifiedInterface() {
     return () => clearInterval(interval)
   }, []) // Only run on mount
 
-  // Settings update handler
-  const updateSetting = <K extends keyof UnifiedSettings>(
+  // Handle auto-send toggle
+  const handleAutoSendToggle = useCallback((enabled: boolean) => {
+    setSettings(prev => ({ ...prev, autoSendOnVoice: enabled }))
+    addActivity('system', `Auto-send voice ${enabled ? 'enabled' : 'disabled'}`, undefined, true)
+  }, [addActivity])
+
+  // Update setting helper
+  const updateSetting = useCallback(<K extends keyof UnifiedSettings>(
     key: K,
     value: UnifiedSettings[K]
   ) => {
     setSettings(prev => ({ ...prev, [key]: value }))
-    addActivity('system', `Setting changed: ${key}`, `New value: ${value}`, true)
-  }
+    addActivity('system', `Updated ${key} to ${value}`, undefined, true)
+  }, [addActivity])
 
   // Clear activity log
   const clearActivityLog = () => {
@@ -364,6 +372,15 @@ export default function UnifiedInterface() {
                       <label className="flex items-center">
                         <input
                           type="checkbox"
+                          checked={settings.autoSendOnVoice}
+                          onChange={(e) => updateSetting('autoSendOnVoice', e.target.checked)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">Auto-send on voice input</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
                           checked={settings.showDocuments}
                           onChange={(e) => updateSetting('showDocuments', e.target.checked)}
                           className="mr-2"
@@ -448,6 +465,9 @@ export default function UnifiedInterface() {
                       enableVoiceInput={settings.enableVoiceInput}
                       autoSpeak={settings.autoSpeak}
                       showDocuments={settings.showDocuments}
+                      autoSendOnVoice={settings.autoSendOnVoice}
+                      initialLanguage={settings.language}
+                      onAutoSendToggle={handleAutoSendToggle}
                       className="h-full"
                     />
                   </div>
@@ -463,6 +483,9 @@ export default function UnifiedInterface() {
                     enableVoiceInput={settings.enableVoiceInput}
                     autoSpeak={settings.autoSpeak}
                     showDocuments={settings.showDocuments}
+                    autoSendOnVoice={settings.autoSendOnVoice}
+                    initialLanguage={settings.language}
+                    onAutoSendToggle={handleAutoSendToggle}
                     className="h-full"
                   />
                 </div>

@@ -43,8 +43,14 @@ export default function KnowledgeManager({
     try {
       setIsLoading(true)
       const response = await apiClient.ragDocuments()
-      if (Array.isArray(response)) {
+      
+      // Handle the correct API response format
+      if (response && typeof response === 'object' && 'documents' in response) {
+        setDocuments(response.documents || [])
+      } else if (Array.isArray(response)) {
         setDocuments(response)
+      } else {
+        setDocuments([])
       }
     } catch (error) {
       onErrorRef.current?.(`Failed to load documents: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -127,7 +133,7 @@ export default function KnowledgeManager({
 
   // Format file size
   const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
+    if (!bytes || bytes === 0) return '0 Bytes'
     const k = 1024
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -136,6 +142,7 @@ export default function KnowledgeManager({
 
   // Format date
   const formatDate = (dateString: string): string => {
+    if (!dateString) return 'Unknown'
     try {
       return new Date(dateString).toLocaleDateString()
     } catch {
@@ -276,7 +283,7 @@ export default function KnowledgeManager({
                     <div className="flex items-center space-x-4 text-xs text-gray-500">
                       <span>📅 {formatDate(doc.upload_date)}</span>
                       <span>📊 {formatFileSize(doc.size)}</span>
-                      <span>🏷️ {doc.file_type.toUpperCase()}</span>
+                      <span>🏷️ {doc.file_type ? doc.file_type.toUpperCase() : 'UNKNOWN'}</span>
                     </div>
                   </div>
                   

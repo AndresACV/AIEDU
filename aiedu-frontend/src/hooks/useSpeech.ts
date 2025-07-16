@@ -22,6 +22,7 @@ interface SpeechState {
   error: string | null
   lastTranscription: string | null
   lastConfidence: number | null
+  currentLanguage: string
 }
 
 interface UseSpeechOptions {
@@ -52,51 +53,58 @@ export function useSpeech({
     audioUrl: null,
     error: null,
     lastTranscription: null,
-    lastConfidence: null
+    lastConfidence: null,
+    currentLanguage: defaultLanguage
   })
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  // Refs for stable access to state
+  const stateRef = useRef(state)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const recordingStartTime = useRef<number>(0)
   const durationInterval = useRef<NodeJS.Timeout>()
-  const stateRef = useRef(state)
-  
-  // Keep state ref updated
+
+  // Update state ref whenever state changes
   useEffect(() => {
     stateRef.current = state
   }, [state])
 
-  // Load available voices  
+  // Update language dynamically
+  const updateLanguage = useCallback((language: string) => {
+    setState(prev => ({ ...prev, currentLanguage: language }))
+  }, [])
+
+  // Load available voices
   const loadVoices = useCallback(async () => {
     setState(prev => ({ ...prev, isLoadingVoices: true, error: null }))
     
     try {
-      const response = await apiClient.getVoices()
+      const response = await apiClient.voices()
       
       if (response.success && response.voices) {
-        setState(prev => ({ ...prev, voices: response.voices!, isLoadingVoices: false }))
+        setState(prev => ({ 
+          ...prev, 
+          voices: response.voices!,
+          isLoadingVoices: false
+        }))
         
-        // Auto-select default voice if enabled
-        if (autoSelectVoice && response.voices.length > 0) {
-          const defaultVoice = response.voices.find(v => 
-            v.language_type === (defaultLanguage.includes('es') ? 'Spanish' : 'English')
-          ) || response.voices[0]
-          
-          setState(prev => ({ ...prev, selectedVoice: defaultVoice }))
+        // Auto-select first voice if enabled and no voice selected
+        if (autoSelectVoice && response.voices.length > 0 && !stateRef.current.selectedVoice) {
+          setState(prev => ({ ...prev, selectedVoice: response.voices![0] }))
         }
       } else {
-        const error = 'Failed to load voices'
+        const error = response.error || 'Failed to load voices'
         setState(prev => ({ ...prev, error, isLoadingVoices: false }))
         onError?.(error)
       }
     } catch (error) {
-      const errorMessage = `Error loading voices: ${error instanceof Error ? error.message : 'Unknown error'}`
+      const errorMessage = `Voice loading error: ${error instanceof Error ? error.message : 'Unknown error'}`
       setState(prev => ({ ...prev, error: errorMessage, isLoadingVoices: false }))
       onError?.(errorMessage)
     }
-  }, []) // Removed dependencies to prevent infinite loop
+  }, [autoSelectVoice, onError])
 
-  // Select a voice
+  // Select voice
   const selectVoice = useCallback((voice: Voice) => {
     setState(prev => ({ ...prev, selectedVoice: voice }))
   }, [])
@@ -136,7 +144,9 @@ export function useSpeech({
           
           try {
             const audioBlob = new Blob(chunks, { type: 'audio/webm' })
-            const response: TranscribeResponse = await apiClient.transcribe(audioBlob, defaultLanguage)
+            // Use current language from state instead of defaultLanguage
+            const currentState = stateRef.current
+            const response: TranscribeResponse = await apiClient.transcribe(audioBlob, currentState.currentLanguage)
             
             if (response.success && response.text) {
               setState(prev => ({ 
@@ -178,7 +188,7 @@ export function useSpeech({
       setState(prev => ({ ...prev, error: errorMessage }))
       onError?.(errorMessage)
     }
-  }, [defaultLanguage, onTranscription, onError])
+  }, [onTranscription, onError])
 
   // Stop audio recording
   const stopRecording = useCallback(() => {
@@ -333,6 +343,11 @@ export function useSpeech({
     loadVoices()
   }, []) // Remove loadVoices dependency to prevent infinite loop
 
+  // Update language when defaultLanguage changes
+  useEffect(() => {
+    updateLanguage(defaultLanguage)
+  }, [defaultLanguage, updateLanguage])
+
   return {
     // State
     ...state,
@@ -353,6 +368,7 @@ export function useSpeech({
     // Utility methods
     clearError,
     clearTranscription,
+    updateLanguage,
     
     // Helper getters
     canRecord: !state.isRecording && !state.isProcessingRecording,

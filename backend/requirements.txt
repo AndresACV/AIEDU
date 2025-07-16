@@ -19,6 +19,10 @@ flask-cors>=4.0.0  # For compatibility during migration
 python-dotenv>=1.0.0
 
 # Speech processing dependencies
+# System dependencies (install via apt on Ubuntu/Debian):
+# apt install build-essential
+# apt install portaudio19-dev python3-dev
+pyaudio>=0.2.11  # Audio input/output processing
 pyttsx3>=2.90  # Text-to-speech for Windows
 wave  # Audio file processing (built-in)
 # Note: espeak is installed via system package manager on Linux/WSL2 

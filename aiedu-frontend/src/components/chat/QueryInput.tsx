@@ -9,7 +9,11 @@ interface QueryInputProps {
   isLoading?: boolean
   placeholder?: string
   enableVoice?: boolean
+  autoSendOnVoice?: boolean
+  onAutoSendToggle?: (enabled: boolean) => void
   className?: string
+  language?: 'en-US' | 'es-ES'
+  onLanguageChange?: (language: 'en-US' | 'es-ES') => void
 }
 
 export default function QueryInput({
@@ -18,9 +22,14 @@ export default function QueryInput({
   isLoading = false,
   placeholder = "Ask a question about your documents...",
   enableVoice = true,
-  className = ''
+  autoSendOnVoice = false,
+  onAutoSendToggle,
+  className = '',
+  language = 'en-US',
+  onLanguageChange
 }: QueryInputProps) {
   const [inputText, setInputText] = useState('')
+  const [currentLanguage, setCurrentLanguage] = useState<'en-US' | 'es-ES'>(language)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Speech integration
@@ -33,13 +42,29 @@ export default function QueryInput({
     clearTranscription,
     error: speechError
   } = useSpeech({
+    defaultLanguage: currentLanguage,
     onTranscription: (text) => {
       setInputText(text)
       onVoiceInput?.(text)
       // Focus textarea after voice input
       setTimeout(() => textareaRef.current?.focus(), 100)
+      
+      // Auto-send if enabled and text is not empty
+      if (autoSendOnVoice && text.trim()) {
+        setTimeout(() => {
+          onSubmit(text.trim())
+          setInputText('')
+          clearTranscription()
+        }, 500) // Small delay to show the transcription first
+      }
     }
   })
+
+  // Handle language change
+  const handleLanguageChange = (newLanguage: 'en-US' | 'es-ES') => {
+    setCurrentLanguage(newLanguage)
+    onLanguageChange?.(newLanguage)
+  }
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -85,8 +110,13 @@ export default function QueryInput({
         <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-sm font-medium text-green-800">Voice Input:</span>
+              <span className="text-sm font-medium text-green-800">
+                Voice Input ({currentLanguage === 'en-US' ? 'English' : 'Spanish'}):
+              </span>
               <p className="text-sm text-green-700 mt-1">"{lastTranscription}"</p>
+              {autoSendOnVoice && (
+                <p className="text-xs text-green-600 mt-1">Auto-sending message...</p>
+              )}
             </div>
             <button
               onClick={clearTranscription}
@@ -102,6 +132,56 @@ export default function QueryInput({
       {speechError && (
         <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
           <span className="text-sm text-red-700">{speechError}</span>
+        </div>
+      )}
+
+      {/* Language selection - only show when voice is enabled */}
+      {enableVoice && (
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">Voice Language:</span>
+            <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => handleLanguageChange('en-US')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${
+                  currentLanguage === 'en-US'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                🇺🇸 English
+              </button>
+              <button
+                onClick={() => handleLanguageChange('es-ES')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${
+                  currentLanguage === 'es-ES'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                🇪🇸 Español
+              </button>
+            </div>
+          </div>
+          
+          {/* Auto-send toggle */}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-600">Auto-send voice:</span>
+                          <button
+                onClick={() => {
+                  onAutoSendToggle?.(!autoSendOnVoice);
+                }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                autoSendOnVoice ? 'bg-blue-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  autoSendOnVoice ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       )}
 
@@ -137,14 +217,14 @@ export default function QueryInput({
               type="button"
               onClick={toggleRecording}
               disabled={isLoading || isProcessingRecording}
-              className={`p-3 rounded-lg transition-all min-w-[48px] h-[48px] flex items-center justify-center ${
+              className={`p-3 rounded-lg transition-all min-w-[48px] h-[48px] flex items-center justify-center relative ${
                 isRecording
                   ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
                   : isProcessingRecording
                   ? 'bg-yellow-500 text-white cursor-not-allowed'
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isRecording ? 'Stop recording' : 'Start voice input'}
+              title={isRecording ? 'Stop recording' : `Start voice input (${currentLanguage === 'en-US' ? 'English' : 'Spanish'})`}
             >
               {isProcessingRecording ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -155,6 +235,11 @@ export default function QueryInput({
                   <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
                 </svg>
               )}
+              
+              {/* Language indicator */}
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center text-xs text-white font-bold">
+                {currentLanguage === 'en-US' ? 'EN' : 'ES'}
+              </div>
             </button>
           )}
 
@@ -177,14 +262,14 @@ export default function QueryInput({
           <div className="flex items-center space-x-4">
             <span>Press Enter to send, Shift+Enter for new line</span>
             {enableVoice && (
-              <span>• Click microphone for voice input</span>
+              <span>• Click microphone for voice input ({currentLanguage === 'en-US' ? 'English' : 'Spanish'})</span>
             )}
           </div>
           
           {isRecording && (
             <div className="flex items-center space-x-2 text-red-600">
               <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
-              <span>Recording... Click to stop</span>
+              <span>Recording... {autoSendOnVoice ? 'Will auto-send' : 'Click to stop'}</span>
             </div>
           )}
         </div>
@@ -193,13 +278,18 @@ export default function QueryInput({
       {/* Example queries */}
       {!inputText && !isLoading && (
         <div className="mt-4 pt-4 border-t border-gray-100">
-          <div className="text-xs text-gray-500 mb-2">Try asking:</div>
+          <div className="text-xs text-gray-500 mb-2">Try asking {currentLanguage === 'en-US' ? 'in English' : 'in Spanish'}:</div>
           <div className="flex flex-wrap gap-2">
-            {[
+            {currentLanguage === 'en-US' ? [
               "What documents do you have?",
               "Summarize the main topics",
               "What is artificial intelligence?",
               "Tell me about machine learning"
+            ] : [
+              "¿Qué documentos tienes?",
+              "Resume los temas principales",
+              "¿Qué es la inteligencia artificial?",
+              "Háblame sobre aprendizaje automático"
             ].map((suggestion, index) => (
               <button
                 key={index}

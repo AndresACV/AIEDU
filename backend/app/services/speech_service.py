@@ -394,6 +394,7 @@ class SpeechService:
         try:
             logger.info(f"🎯 SpeechService.transcribe_audio called with: {audio_path}")
             logger.info(f"📏 Input file size: {os.path.getsize(audio_path) if os.path.exists(audio_path) else 'FILE NOT FOUND'} bytes")
+            logger.info(f"🌍 Language requested: {language}")
             
             self.performance_stats['stt_calls'] += 1
             
@@ -406,6 +407,18 @@ class SpeechService:
             if self.provider != current_provider:
                 logger.info(f"🔄 Switching STT provider from {self.provider} to {current_provider}")
                 self.set_provider(current_provider)
+            
+            # Force cloud provider for Spanish language if available
+            # This is because the local Spanish Vosk model is not available
+            use_cloud_for_spanish = (
+                language.startswith("es") and 
+                self.cloud_stt_provider and 
+                self.provider != "cloud"
+            )
+            
+            if use_cloud_for_spanish:
+                logger.info("🌩️ Automatically using Google Cloud STT for Spanish language")
+                return await self._transcribe_with_cloud(audio_path, language, start_time)
             
             # Try cloud provider first if requested and available
             if self.provider == "cloud" and self.cloud_stt_provider:
