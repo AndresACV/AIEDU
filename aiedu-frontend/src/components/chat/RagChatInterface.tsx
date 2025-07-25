@@ -235,7 +235,7 @@ export default function RagChatInterface({
       messages: messages.filter(m => m.type !== 'system'),
       stats: ragStats
     }
-    
+
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -265,32 +265,29 @@ export default function RagChatInterface({
     <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={chatContainerRef}>
       {messages.map((message) => (
         <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-          <div className={`max-w-[85%] ${
-            message.type === 'user'
-              ? 'bg-blue-500 text-white rounded-l-xl rounded-tr-xl'
+          <div className={`max-w-[85%] ${message.type === 'user'
+              ? 'bg-ultramarine text-white rounded-l-xl rounded-tr-xl'
               : message.type === 'system'
-              ? 'bg-purple-100 text-purple-800 rounded-xl border border-purple-200'
-              : message.error
-              ? 'bg-red-50 text-red-800 rounded-r-xl rounded-tl-xl border border-red-200'
-              : 'bg-gray-100 text-gray-800 rounded-r-xl rounded-tl-xl'
-          } p-4 shadow-sm relative group`}>
-            
+                ? 'bg-kellygreen/10 text-kellygreen rounded-xl border border-kellygreen/20'
+                : message.error
+                  ? 'bg-red-50 text-red-800 rounded-r-xl rounded-tl-xl border border-red-200'
+                  : 'bg-lightkblue text-midnightblue rounded-r-xl rounded-tl-xl'
+            } p-4 shadow-sm relative group`}>
+
             {/* Message header */}
             <div className="flex items-center space-x-2 mb-2">
               <span className="text-sm">{getMessageIcon(message)}</span>
-              <span className={`text-xs font-medium ${
-                message.type === 'user' ? 'text-blue-100' : 
-                message.type === 'system' ? 'text-purple-600' :
-                'text-gray-600'
-              }`}>
-                {message.type === 'user' ? 'You' : 
-                 message.type === 'system' ? 'System' : 'Assistant'}
+              <span className={`text-xs font-medium ${message.type === 'user' ? 'text-blue-100' :
+                  message.type === 'system' ? 'text-purple-600' :
+                    'text-gray-600'
+                }`}>
+                {message.type === 'user' ? 'You' :
+                  message.type === 'system' ? 'System' : 'Assistant'}
               </span>
-              <span className={`text-xs ${
-                message.type === 'user' ? 'text-blue-200' : 
-                message.type === 'system' ? 'text-purple-500' :
-                'text-gray-500'
-              }`}>
+              <span className={`text-xs ${message.type === 'user' ? 'text-blue-200' :
+                  message.type === 'system' ? 'text-purple-500' :
+                    'text-gray-500'
+                }`}>
                 {formatTime(message.timestamp)}
               </span>
             </div>
@@ -325,7 +322,7 @@ export default function RagChatInterface({
                       {isPlaying ? '🔊' : '🔈'}
                     </button>
                   )}
-                  
+
                   {message.retrievedDocs && message.retrievedDocs.length > 0 && (
                     <button
                       onClick={() => setSelectedMessageId(
@@ -342,19 +339,19 @@ export default function RagChatInterface({
             )}
 
             {/* Document preview for selected message */}
-            {message.type === 'assistant' && 
-             message.retrievedDocs && 
-             showDocuments && 
-             selectedMessageId === message.id && (
-              <div className="mt-4 pt-3 border-t border-gray-200">
-                <DocumentViewer
-                  documents={message.retrievedDocs}
-                  query={message.query}
-                  className="text-xs"
-                  maxPreviewLength={200}
-                />
-              </div>
-            )}
+            {message.type === 'assistant' &&
+              message.retrievedDocs &&
+              showDocuments &&
+              selectedMessageId === message.id && (
+                <div className="mt-4 pt-3 border-t border-gray-200">
+                  <DocumentViewer
+                    documents={message.retrievedDocs}
+                    query={message.query}
+                    className="text-xs"
+                    maxPreviewLength={200}
+                  />
+                </div>
+              )}
           </div>
         </div>
       ))}
@@ -396,7 +393,7 @@ export default function RagChatInterface({
             <span>🔊 {selectedVoice.name}</span>
           )}
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <button
             onClick={exportConversation}
@@ -420,9 +417,9 @@ export default function RagChatInterface({
   )
 
   return (
-    <div className={`flex flex-col h-full bg-white rounded-lg border border-gray-200 shadow-sm ${className}`}>
+    <div className={`flex flex-col h-full bg-white rounded-2xl border border-gray-100 shadow-lg ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+      <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-lightkblue rounded-t-2xl">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-lg font-bold">
             🤖
@@ -447,7 +444,7 @@ export default function RagChatInterface({
       {renderChatMessages()}
 
       {/* Input area */}
-      <div className="border-t border-gray-200">
+      <div className="bg-ultramarine hover:bg-midnightblue text-white px-4 py-2 rounded-full">
         <QueryInput
           onSubmit={submitQuery}
           isLoading={isLoading}
